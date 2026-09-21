@@ -17,10 +17,13 @@ export interface ResearchTopicResult {
 }
 
 /**
- * Researches a topic and stores what it finds as sources for that topic's org.
+ * Researches a topic and stores what it finds as sources for that topic.
  *
- * Sources are keyed by URL within an org, so re-running this on the same topic
- * is safe: already-known papers are counted as skipped rather than duplicated.
+ * Sources are keyed by URL within a topic, so re-running this on the same
+ * topic is safe: already-known papers are counted as skipped rather than
+ * duplicated. (The same paper can end up as a separate Source row under a
+ * different topic — Source.topicId is a single required field, not a join
+ * table, so this is the deliberate tradeoff for keeping the schema simple.)
  * The topic moves to RESEARCHED only if at least one source landed — a search
  * that found nothing leaves it NEW so it can be retried with a better query.
  */
@@ -36,7 +39,7 @@ export async function researchTopic(
   const found = await searchEuropePmc(topic.title, options);
 
   const existing = await prisma.source.findMany({
-    where: { orgId: topic.orgId, url: { in: found.map((s) => s.url) } },
+    where: { topicId: topic.id, url: { in: found.map((s) => s.url) } },
     select: { url: true },
   });
   const known = new Set(existing.map((s) => s.url));
@@ -45,7 +48,7 @@ export async function researchTopic(
 
   if (fresh.length > 0) {
     await prisma.source.createMany({
-      data: fresh.map((source) => ({ ...source, orgId: topic.orgId })),
+      data: fresh.map((source) => ({ ...source, orgId: topic.orgId, topicId: topic.id })),
     });
 
     await prisma.topic.update({
