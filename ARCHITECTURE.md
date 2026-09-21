@@ -7,43 +7,52 @@ This SaaS template follows a modern, scalable architecture built on Next.js 16 w
 ## Tech Stack
 
 ### Core Framework
+
 - **Next.js 16** - React framework with App Router
 - **React 19** - UI library
 - **TypeScript** - Type safety
 
 ### Styling
+
 - **Tailwind CSS 4** - Utility-first CSS
 - **shadcn/ui** - Component library
 - **Radix UI** - Headless UI primitives
 
 ### Backend & Database
+
 - **Prisma** - ORM
 - **PostgreSQL** - Database
 - **Supabase** - Auth & Database hosting
 
 ### Authentication & Authorization
+
 - **Supabase Auth** - Authentication provider
 - **JWT** - Token-based auth
 - **RLS** - Row Level Security
 
 ### Payments
+
 - **Stripe** - Payment processing
 - **Stripe Webhooks** - Event handling
 
 ### AI Integration
+
 - **OpenAI API** - AI capabilities
 - **Usage tracking** - Token and limit management
 
 ### State Management
+
 - **Server Actions** - Server state
 - **Zustand** - Client state
 - **React Cache** - Request memoization
 
 ### Validation
+
 - **Zod** - Schema validation
 - **Type inference** - Automatic TypeScript types
 
 ### Development Tools
+
 - **ESLint** - Linting
 - **Prettier** - Code formatting
 - **Husky** - Git hooks
@@ -85,21 +94,25 @@ src/
 ### 3. Layered Architecture
 
 **Presentation Layer** (`app/`, `components/`)
+
 - Pages and UI components
 - Client-side interactions
 - Form handling
 
 **Business Logic Layer** (`lib/actions/`, `lib/*/`)
+
 - Server actions
 - Business rules
 - Integration logic
 
 **Data Access Layer** (`lib/db.ts`, Prisma)
+
 - Database queries
 - ORM operations
 - Data models
 
 **External Services Layer** (`lib/stripe/`, `lib/ai/`, `lib/supabase/`)
+
 - Third-party integrations
 - API clients
 - Service wrappers
@@ -159,18 +172,21 @@ src/
 ## Security
 
 ### Authentication Security
+
 - JWT-based sessions
 - HTTP-only cookies
 - Secure cookie flags in production
 - Row Level Security (RLS)
 
 ### API Security
+
 - Server Actions for mutations
 - Input validation with Zod
 - Rate limiting (recommended)
 - CSRF protection
 
 ### Data Security
+
 - Environment variable validation
 - Sensitive data in server-only files
 - Database connection pooling
@@ -179,22 +195,26 @@ src/
 ## Performance Optimizations
 
 ### Server Components
+
 - Default to server components
 - Reduced JavaScript bundle size
 - Faster initial page loads
 
 ### Database
+
 - Connection pooling
 - Query optimization
 - Indexed fields
 - Efficient relations
 
 ### Caching
+
 - React Cache for request deduplication
 - Next.js automatic caching
 - Revalidation strategies
 
 ### Code Splitting
+
 - Automatic code splitting by route
 - Dynamic imports for heavy components
 - Lazy loading where appropriate
@@ -217,22 +237,26 @@ Next.js Server (Serverless Functions)
 ## Scalability Considerations
 
 ### Horizontal Scaling
+
 - Stateless server architecture
 - Database connection pooling
 - Distributed session storage
 
 ### Database Scaling
+
 - Read replicas (future)
 - Query optimization
 - Proper indexing
 - Connection pooling
 
 ### API Rate Limiting
+
 - Per-user rate limits
 - Redis for distributed limiting (future)
 - Graceful degradation
 
 ### Monitoring
+
 - Error tracking (Sentry recommended)
 - Performance monitoring
 - Usage analytics
@@ -241,16 +265,19 @@ Next.js Server (Serverless Functions)
 ## Testing Strategy
 
 ### Unit Tests
+
 - Business logic functions
 - Utility functions
 - Validation schemas
 
 ### Integration Tests
+
 - Server Actions
 - API endpoints
 - Database operations
 
 ### E2E Tests
+
 - Critical user flows
 - Payment flow
 - Auth flow
@@ -258,16 +285,19 @@ Next.js Server (Serverless Functions)
 ## Environment Management
 
 ### Development
+
 - Local PostgreSQL or Supabase
 - Stripe test mode
 - OpenAI with usage limits
 
 ### Staging
+
 - Dedicated database
 - Stripe test mode
 - Separate env variables
 
 ### Production
+
 - Production database with backups
 - Stripe live mode
 - Production API keys
@@ -276,24 +306,28 @@ Next.js Server (Serverless Functions)
 ## Best Practices
 
 ### Code Organization
+
 - One component per file
 - Colocate related files
 - Clear naming conventions
 - Consistent file structure
 
 ### Type Safety
+
 - Strict TypeScript mode
 - Infer types from Zod schemas
 - Use Prisma types
 - Avoid `any` type
 
 ### Error Handling
+
 - Custom error classes
 - Consistent error responses
 - User-friendly messages
 - Detailed logging
 
 ### Validation
+
 - Client-side validation (UX)
 - Server-side validation (security)
 - Zod schemas
@@ -302,6 +336,7 @@ Next.js Server (Serverless Functions)
 ## Future Enhancements
 
 ### Planned Features
+
 - [ ] Real-time features (WebSockets)
 - [ ] Advanced analytics
 - [ ] Team/organization support
@@ -310,14 +345,15 @@ Next.js Server (Serverless Functions)
 - [ ] Advanced AI features
 
 ### Infrastructure
+
 - [ ] Redis for caching
 - [ ] Queue system (BullMQ)
 - [ ] CDN for assets
 - [ ] Multi-region deployment
 
 ### Monitoring
+
 - [ ] APM integration
 - [ ] Custom dashboards
 - [ ] Automated alerts
 - [ ] Performance budgets
-

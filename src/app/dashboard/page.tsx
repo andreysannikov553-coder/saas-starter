@@ -29,7 +29,7 @@ async function getDashboardData(userId: string) {
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  
+
   if (!user) {
     return null;
   }
@@ -69,9 +69,7 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome back, {user.email}!
-        </p>
+        <p className="text-muted-foreground">Welcome back, {user.email}!</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -79,11 +77,11 @@ export default async function DashboardPage() {
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <stat.icon className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.description}</p>
+              <p className="text-muted-foreground text-xs">{stat.description}</p>
             </CardContent>
           </Card>
         ))}
@@ -92,26 +90,24 @@ export default async function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>Getting Started</CardTitle>
-          <CardDescription>
-            Quick links to help you get started with your account
-          </CardDescription>
+          <CardDescription>Quick links to help you get started with your account</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="rounded-lg border p-4">
             <h3 className="font-semibold">Set up your profile</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Complete your profile to get the most out of the platform
             </p>
           </div>
           <div className="rounded-lg border p-4">
             <h3 className="font-semibold">Connect integrations</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Connect your favorite tools and services
             </p>
           </div>
           <div className="rounded-lg border p-4">
             <h3 className="font-semibold">Try AI features</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Explore our AI-powered content generation tools
             </p>
           </div>
@@ -120,4 +116,3 @@ export default async function DashboardPage() {
     </div>
   );
 }
-

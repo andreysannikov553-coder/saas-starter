@@ -8,7 +8,7 @@ import { prisma } from "@/lib/db";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
-  
+
   if (!user) {
     return null;
   }
@@ -26,18 +26,14 @@ export default async function SettingsPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account settings and preferences
-        </p>
+        <p className="text-muted-foreground">Manage your account settings and preferences</p>
       </div>
 
       <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>
-            <CardDescription>
-              Update your personal information
-            </CardDescription>
+            <CardDescription>Update your personal information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -61,9 +57,7 @@ export default async function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Password</CardTitle>
-            <CardDescription>
-              Change your password
-            </CardDescription>
+            <CardDescription>Change your password</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -85,15 +79,13 @@ export default async function SettingsPage() {
         <Card className="border-destructive">
           <CardHeader>
             <CardTitle className="text-destructive">Danger Zone</CardTitle>
-            <CardDescription>
-              Irreversible actions for your account
-            </CardDescription>
+            <CardDescription>Irreversible actions for your account</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Delete Account</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   Permanently delete your account and all data
                 </p>
               </div>
@@ -105,4 +97,3 @@ export default async function SettingsPage() {
     </div>
   );
 }
-

@@ -167,6 +167,7 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 4. Deploy
 
 **Important:** Update these for production:
+
 - `NEXT_PUBLIC_APP_URL` → your production URL
 - `NODE_ENV` → "production"
 - Use Stripe live keys instead of test keys
@@ -207,6 +208,7 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ### Customize Email Templates
 
 In Supabase:
+
 - Go to Authentication > Email Templates
 - Customize templates for:
   - Confirmation email
@@ -259,4 +261,3 @@ npx prisma db pull
   - [Stripe](https://stripe.com/docs)
   - [Prisma](https://www.prisma.io/docs)
   - [OpenAI](https://platform.openai.com/docs)
-

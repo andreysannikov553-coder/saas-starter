@@ -43,9 +43,7 @@ export async function getOrCreateCustomer(userId: string, email: string): Promis
 /**
  * Get subscription details from Stripe
  */
-export async function getSubscription(
-  subscriptionId: string
-): Promise<Stripe.Subscription | null> {
+export async function getSubscription(subscriptionId: string): Promise<Stripe.Subscription | null> {
   try {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
     return subscription;
@@ -98,4 +96,3 @@ export async function updateSubscriptionPlan(
 
   return updatedSubscription;
 }
-

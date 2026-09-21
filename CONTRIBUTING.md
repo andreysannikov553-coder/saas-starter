@@ -36,6 +36,7 @@ type(scope): description
 ```
 
 Types:
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation
@@ -45,6 +46,7 @@ Types:
 - `chore`: Maintenance
 
 Examples:
+
 ```
 feat(auth): add password reset functionality
 fix(stripe): handle webhook timeout errors
@@ -72,20 +74,24 @@ docs(readme): update setup instructions
 
 ```markdown
 ## Description
+
 Brief description of changes
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
 
 ## Testing
+
 - [ ] Tests pass locally
 - [ ] Added new tests
 - [ ] Manual testing completed
 
 ## Checklist
+
 - [ ] Code follows style guidelines
 - [ ] Self-review completed
 - [ ] Comments added for complex code
@@ -107,35 +113,35 @@ Brief description of changes
 ```tsx
 // Good: Server Component (default)
 export default function MyComponent() {
-  return <div>Hello</div>
+  return <div>Hello</div>;
 }
 
 // Client Component when needed
-"use client"
+("use client");
 export function InteractiveComponent() {
-  const [state, setState] = useState()
-  return <div>Interactive</div>
+  const [state, setState] = useState();
+  return <div>Interactive</div>;
 }
 ```
 
 ### Server Actions
 
 ```tsx
-"use server"
+"use server";
 
 export async function myAction(formData: FormData) {
   return handleServerAction(async () => {
     // Validate input
-    const data = schema.parse(formData)
-    
+    const data = schema.parse(formData);
+
     // Business logic
-    const result = await doSomething(data)
-    
+    const result = await doSomething(data);
+
     // Revalidate if needed
-    revalidatePath("/path")
-    
-    return result
-  })
+    revalidatePath("/path");
+
+    return result;
+  });
 }
 ```
 
@@ -143,13 +149,13 @@ export async function myAction(formData: FormData) {
 
 ```tsx
 // imports
-import { } from "package"
+import {} from "package";
 
 // types
-type Props = {}
+type Props = {};
 
 // component
-export default function Component({ }: Props) {
+export default function Component({}: Props) {
   // hooks
   // handlers
   // render
@@ -203,4 +209,3 @@ npm run lint:fix
 ## License
 
 By contributing, you agree that your contributions will be licensed under the same license as the project (MIT).
-

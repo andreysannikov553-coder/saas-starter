@@ -33,10 +33,7 @@ export function formatNumber(num: number): string {
 /**
  * Format date
  */
-export function formatDate(
-  date: Date | string,
-  formatStr: string = "MMM dd, yyyy"
-): string {
+export function formatDate(date: Date | string, formatStr: string = "MMM dd, yyyy"): string {
   const dateObj = typeof date === "string" ? new Date(date) : date;
   return dateFnsFormat(dateObj, formatStr);
 }
@@ -97,4 +94,3 @@ export function slugify(text: string): string {
 export function formatPercentage(value: number, decimals: number = 2): string {
   return `${(value * 100).toFixed(decimals)}%`;
 }
-
