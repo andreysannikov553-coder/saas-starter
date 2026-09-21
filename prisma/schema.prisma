@@ -363,6 +363,9 @@ model Video {
   scriptId    String      @map("script_id")
   status      VideoStatus @default(QUEUED)
   durationSec Int?        @map("duration_sec")
+  // Озвучка сценария — промежуточный артефакт до сборки видео (ffmpeg +
+  // Render Gate ещё не построены). assetUrl остаётся готовым видео.
+  audioUrl    String?     @map("audio_url")
   assetUrl    String?     @map("asset_url")
   costUsd     Float?      @map("cost_usd")
   createdAt   DateTime    @default(now()) @map("created_at")
