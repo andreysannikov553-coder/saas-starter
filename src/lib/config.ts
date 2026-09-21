@@ -9,10 +9,6 @@ export const siteConfig = {
   description: "Production-ready SaaS template with Next.js, Supabase, Stripe, and OpenAI",
   url: env.NEXT_PUBLIC_APP_URL,
   ogImage: `${env.NEXT_PUBLIC_APP_URL}/og.png`,
-  links: {
-    twitter: "https://twitter.com/yourusername",
-    github: "https://github.com/yourusername/template",
-  },
 };
 
 export const dashboardConfig = {

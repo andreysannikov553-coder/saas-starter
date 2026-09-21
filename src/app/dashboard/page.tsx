@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
 import { getDashboardOverview } from "@/lib/actions/dashboard";
@@ -82,22 +83,22 @@ export default async function DashboardPage() {
           <CardDescription>С чего начать работу с аккаунтом</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="rounded-lg border p-4">
+          <Link href="/dashboard/settings" className="hover:bg-accent block rounded-lg border p-4">
             <h3 className="font-semibold">Заполните профиль</h3>
             <p className="text-muted-foreground text-sm">Укажите имя и аватар в настройках</p>
-          </div>
-          <div className="rounded-lg border p-4">
+          </Link>
+          <Link href="/dashboard/ai" className="hover:bg-accent block rounded-lg border p-4">
             <h3 className="font-semibold">Попробуйте AI-функции</h3>
             <p className="text-muted-foreground text-sm">
               Сгенерируйте первый контент с помощью AI
             </p>
-          </div>
-          <div className="rounded-lg border p-4">
+          </Link>
+          <Link href="/pricing" className="hover:bg-accent block rounded-lg border p-4">
             <h3 className="font-semibold">Выберите тариф</h3>
             <p className="text-muted-foreground text-sm">
               Сравните возможности на странице тарифов
             </p>
-          </div>
+          </Link>
         </CardContent>
       </Card>
     </div>
