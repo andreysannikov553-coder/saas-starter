@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { constructWebhookEvent, handleWebhookEvent } from "@/lib/stripe/webhook";
+import { logger } from "@/lib/utils/logger";
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -11,17 +12,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No signature" }, { status: 400 });
   }
 
+  // A bad signature is permanent: answer 4xx so Stripe stops retrying.
+  let event;
   try {
-    const event = constructWebhookEvent(body, signature);
-    await handleWebhookEvent(event);
-
-    return NextResponse.json({ received: true });
+    event = constructWebhookEvent(body, signature);
   } catch (error) {
-    console.error("Webhook error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Webhook error" },
-      { status: 400 }
-    );
+    logger.warn("Rejected Stripe webhook with invalid signature", error);
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
-}
 
+  // A processing failure is usually transient (database, network). Answer 5xx
+  // so Stripe retries — a 4xx here would drop the event permanently.
+  try {
+    await handleWebhookEvent(event);
+  } catch {
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
+  }
+
+  return NextResponse.json({ received: true });
+}

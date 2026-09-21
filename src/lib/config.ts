@@ -54,7 +54,8 @@ export const marketingConfig = {
 };
 
 /**
- * Usage limits by plan
+ * Usage limits by plan. Keys match `PricingPlan["id"]`.
+ * A negative value means unlimited.
  */
 export const usageLimits = {
   free: {
@@ -67,7 +68,7 @@ export const usageLimits = {
     apiCalls: 10000,
     storage: 10 * 1024 * 1024 * 1024, // 10GB
   },
-  enterprise: {
+  business: {
     aiTokens: -1, // unlimited
     apiCalls: -1, // unlimited
     storage: -1, // unlimited
@@ -84,4 +85,3 @@ export const features = {
   translation: true,
   apiAccess: true,
 };
-

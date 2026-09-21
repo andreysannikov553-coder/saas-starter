@@ -36,7 +36,8 @@ yarn-error.log*
 next-env.d.ts
 
 # Prisma
-prisma/migrations/
+# Migrations are intentionally tracked: without them the schema cannot be
+# reproduced, rolled back, or applied in CI.
 
 # IDE
 .vscode/

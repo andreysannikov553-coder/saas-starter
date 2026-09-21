@@ -21,30 +21,32 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  subscription Subscription?
-  usage        Usage[]
-  apiKeys      ApiKey[]
+  subscription     Subscription?
+  usage            Usage[]
+  apiKeys          ApiKey[]
+  generatedContent GeneratedContent[]
 
   @@map("users")
 }
 
 // Subscription model for Stripe integration
 model Subscription {
-  id                   String               @id @default(uuid())
-  userId               String               @unique @map("user_id")
-  stripeCustomerId     String               @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?              @unique @map("stripe_subscription_id")
-  stripePriceId        String?              @map("stripe_price_id")
-  status               SubscriptionStatus   @default(INACTIVE)
-  currentPeriodStart   DateTime?            @map("current_period_start")
-  currentPeriodEnd     DateTime?            @map("current_period_end")
-  cancelAtPeriodEnd    Boolean              @default(false) @map("cancel_at_period_end")
-  createdAt            DateTime             @default(now()) @map("created_at")
-  updatedAt            DateTime             @updatedAt @map("updated_at")
+  id                   String             @id @default(uuid())
+  userId               String             @unique @map("user_id")
+  stripeCustomerId     String             @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripePriceId        String?            @map("stripe_price_id")
+  status               SubscriptionStatus @default(INACTIVE)
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([stripeSubscriptionId])
   @@map("subscriptions")
 }
 
@@ -82,10 +84,10 @@ enum UsageType {
 
 // API Keys for user authentication
 model ApiKey {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
   name      String
-  key       String   @unique
+  key       String    @unique
   lastUsed  DateTime? @map("last_used")
   expiresAt DateTime? @map("expires_at")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -97,16 +99,23 @@ model ApiKey {
   @@map("api_keys")
 }
 
-// Webhook events for tracking Stripe webhooks
+// Webhook events for tracking Stripe webhooks.
+//
+// `id` is the provider's own event id (Stripe `evt_...`), not a generated
+// uuid: the primary key IS the deduplication guarantee. Stripe delivers
+// at-least-once, so the same event arrives more than once in normal
+// operation and must not be applied twice.
 model WebhookEvent {
-  id        String   @id @default(uuid())
-  type      String
-  data      Json
-  processed Boolean  @default(false)
-  error     String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String    @id
+  type        String
+  data        Json
+  processed   Boolean   @default(false)
+  processedAt DateTime? @map("processed_at")
+  error       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([type, processed])
+  @@index([createdAt])
   @@map("webhook_events")
 }
 
@@ -121,7 +130,9 @@ model GeneratedContent {
   metadata  Json?
   createdAt DateTime @default(now()) @map("created_at")
 
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, createdAt])
   @@map("generated_content")
 }
-
