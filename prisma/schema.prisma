@@ -30,17 +30,17 @@ model User {
 
 // Subscription model for Stripe integration
 model Subscription {
-  id                   String               @id @default(uuid())
-  userId               String               @unique @map("user_id")
-  stripeCustomerId     String               @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?              @unique @map("stripe_subscription_id")
-  stripePriceId        String?              @map("stripe_price_id")
-  status               SubscriptionStatus   @default(INACTIVE)
-  currentPeriodStart   DateTime?            @map("current_period_start")
-  currentPeriodEnd     DateTime?            @map("current_period_end")
-  cancelAtPeriodEnd    Boolean              @default(false) @map("cancel_at_period_end")
-  createdAt            DateTime             @default(now()) @map("created_at")
-  updatedAt            DateTime             @updatedAt @map("updated_at")
+  id                   String             @id @default(uuid())
+  userId               String             @unique @map("user_id")
+  stripeCustomerId     String             @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripePriceId        String?            @map("stripe_price_id")
+  status               SubscriptionStatus @default(INACTIVE)
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -82,10 +82,10 @@ enum UsageType {
 
 // API Keys for user authentication
 model ApiKey {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
   name      String
-  key       String   @unique
+  key       String    @unique
   lastUsed  DateTime? @map("last_used")
   expiresAt DateTime? @map("expires_at")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -125,3 +125,315 @@ model GeneratedContent {
   @@map("generated_content")
 }
 
+// =========================================================================
+// CONTENT ENGINE — AI media agent
+// Схема из раздела 9 Product Discovery дока. Multi-tenancy через orgId
+// с первой миграции: каждая content-запись принадлежит организации,
+// даже пока в системе только одна (сам Andrey).
+// =========================================================================
+
+// Организация — арендатор. Пока одна, но изоляция закладывается сразу.
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  characters   Character[]
+  platforms    PlatformAccount[]
+  topics       Topic[]
+  sources      Source[]
+  scripts      Script[]
+  videos       Video[]
+  publications Publication[]
+  experiments  Experiment[]
+
+  @@map("organizations")
+}
+
+// AI-персонаж/ведущий канала (одна из пяти концепций раздела 2 дока).
+model Character {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  name        String
+  slug        String
+  bio         String?
+  toneOfVoice String?  @map("tone_of_voice")
+  visualStyle Json?    @map("visual_style")
+  rules       Json?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  scripts Script[]
+
+  @@unique([orgId, slug])
+  @@map("characters")
+}
+
+// Аккаунт на платформе публикации (Telegram-бот, Instagram, Threads, ...).
+model PlatformAccount {
+  id          String       @id @default(uuid())
+  orgId       String       @map("org_id")
+  platform    PlatformKind
+  handle      String
+  autoPublish Boolean      @default(false) @map("auto_publish")
+  credentials Json?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  publications Publication[]
+
+  @@unique([orgId, platform, handle])
+  @@map("platform_accounts")
+}
+
+enum PlatformKind {
+  TELEGRAM
+  INSTAGRAM
+  THREADS
+  TIKTOK
+  YOUTUBE_SHORTS
+  X
+  FACEBOOK
+  PINTEREST
+  OWN_SITE
+}
+
+// Тема/ниша для контента — вход в research engine.
+model Topic {
+  id        String      @id @default(uuid())
+  orgId     String      @map("org_id")
+  title     String
+  pillar    String?
+  status    TopicStatus @default(NEW)
+  notes     String?
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  scripts Script[]
+
+  @@index([orgId, status])
+  @@map("topics")
+}
+
+enum TopicStatus {
+  NEW
+  RESEARCHED
+  SCRIPTED
+  ARCHIVED
+}
+
+// Источник для фактчека (научная публикация, обзор, официальный орган).
+model Source {
+  id          String     @id @default(uuid())
+  orgId       String     @map("org_id")
+  title       String
+  url         String
+  sourceType  SourceType @map("source_type")
+  publishedAt DateTime?  @map("published_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  claims Claim[]
+
+  @@index([orgId])
+  @@map("sources")
+}
+
+enum SourceType {
+  PRIMARY_STUDY
+  SYSTEMATIC_REVIEW
+  META_ANALYSIS
+  OFFICIAL_BODY
+  UNIVERSITY
+  PROFESSIONAL_ORG
+  OTHER
+}
+
+// Проверенное утверждение с уровнем доказательности A–D (раздел 5 дока).
+model Claim {
+  id            String        @id @default(uuid())
+  sourceId      String        @map("source_id")
+  text          String
+  evidenceLevel EvidenceLevel @map("evidence_level")
+  hedgePhrase   String?       @map("hedge_phrase")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  source      Source       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  scriptBeats ScriptBeat[]
+
+  @@index([sourceId])
+  @@map("claims")
+}
+
+enum EvidenceLevel {
+  A // мета-анализы, систематические обзоры, консенсус official bodies
+  B // качественные отдельные исследования
+  C // предварительные/малые исследования — только с хеджем
+  D // экспертное мнение без прямых данных — только с явной оговоркой
+}
+
+// Сценарий — платформо-независимая структура битов, не текст.
+model Script {
+  id            String       @id @default(uuid())
+  orgId         String       @map("org_id")
+  topicId       String?      @map("topic_id")
+  characterId   String?      @map("character_id")
+  templateSlug  String?      @map("template_slug") // раздел 18.2: диалог органов / что если / разоблачение / ...
+  status        ScriptStatus @default(DRAFT)
+  targetSeconds Int?         @map("target_seconds") // 15–35 сек, раздел 18.3
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  topic     Topic?       @relation(fields: [topicId], references: [id])
+  character Character?   @relation(fields: [characterId], references: [id])
+  beats     ScriptBeat[]
+  hooks     Hook[]
+  videos    Video[]
+
+  @@index([orgId, status])
+  @@map("scripts")
+}
+
+enum ScriptStatus {
+  DRAFT
+  FACT_GATE_PENDING
+  FACT_GATE_PASSED
+  SCRIPT_GATE_PASSED
+  APPROVED
+  REJECTED
+}
+
+// Один бит сценария: роль, реплика, визуальное намерение, ссылка на claim.
+model ScriptBeat {
+  id           String   @id @default(uuid())
+  scriptId     String   @map("script_id")
+  order        Int
+  role         BeatRole
+  line         String
+  visualIntent String?  @map("visual_intent")
+  claimId      String?  @map("claim_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  script Script @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  claim  Claim? @relation(fields: [claimId], references: [id])
+
+  @@unique([scriptId, order])
+  @@map("script_beats")
+}
+
+enum BeatRole {
+  HOOK
+  CURIOSITY
+  VALUE
+  PAYOFF
+  CTA
+}
+
+// Вариант хука — агент генерирует несколько на один сценарий (раздел 4).
+model Hook {
+  id        String   @id @default(uuid())
+  scriptId  String   @map("script_id")
+  text      String
+  hookType  String?  @map("hook_type") // обвинение / гипотеза / скрытая деталь — раздел 18.2
+  score     Json? // 5 критериев Hook Optimizer, раздел 4
+  createdAt DateTime @default(now()) @map("created_at")
+
+  script Script @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  @@index([scriptId])
+  @@map("hooks")
+}
+
+// Готовый рендер (Render Gate пройден) для конкретной платформы.
+model Video {
+  id          String      @id @default(uuid())
+  orgId       String      @map("org_id")
+  scriptId    String      @map("script_id")
+  status      VideoStatus @default(QUEUED)
+  durationSec Int?        @map("duration_sec")
+  assetUrl    String?     @map("asset_url")
+  costUsd     Float?      @map("cost_usd")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  script       Script        @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  publications Publication[]
+
+  @@index([orgId, status])
+  @@map("videos")
+}
+
+enum VideoStatus {
+  QUEUED
+  RENDERING
+  RENDER_GATE_FAILED
+  READY
+  PUBLISHED
+  FAILED
+}
+
+// Публикация конкретного видео на конкретном платформенном аккаунте.
+model Publication {
+  id                String            @id @default(uuid())
+  orgId             String            @map("org_id")
+  videoId           String            @map("video_id")
+  platformAccountId String            @map("platform_account_id")
+  status            PublicationStatus @default(PENDING)
+  externalId        String?           @map("external_id")
+  publishedAt       DateTime?         @map("published_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  org             Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  video           Video               @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  platformAccount PlatformAccount     @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  analytics       AnalyticsSnapshot[]
+
+  @@index([orgId, status])
+  @@map("publications")
+}
+
+enum PublicationStatus {
+  PENDING
+  MANUAL_REQUIRED // Instagram/Threads до одобрения app review — раздел 17
+  PUBLISHED
+  FAILED
+}
+
+// Снимок метрик публикации во времени (watch time, retention, completion).
+model AnalyticsSnapshot {
+  id             String   @id @default(uuid())
+  publicationId  String   @map("publication_id")
+  capturedAt     DateTime @default(now()) @map("captured_at")
+  views          Int?
+  retention3sPct Float?   @map("retention_3s_pct")
+  completionRate Float?   @map("completion_rate")
+  raw            Json?
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId, capturedAt])
+  @@map("analytics_snapshots")
+}
+
+// Эксперимент self-improving engine (A/B хуков, тайминга, форматов).
+model Experiment {
+  id         String   @id @default(uuid())
+  orgId      String   @map("org_id")
+  name       String
+  hypothesis String
+  status     String   @default("running")
+  result     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("experiments")
+}
