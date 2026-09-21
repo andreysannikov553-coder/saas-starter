@@ -1,10 +1,11 @@
 "use server";
 
-import { requireUserId, hasActiveSubscription } from "@/lib/auth";
+import { requireUserId } from "@/lib/auth";
 import { handleServerAction } from "@/lib/utils/error";
 import { generateCompletion, type CompletionResult } from "@/lib/ai/client";
 import { assertWithinLimit, trackUsage, saveGeneratedContent } from "@/lib/ai/utils";
-import { usageLimits } from "@/lib/config";
+import { getEntitlements } from "@/lib/billing/entitlements";
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   SYSTEM_PROMPTS,
   codeGenerationPrompt,
@@ -17,18 +18,6 @@ import {
   summarizeSchema,
   translateSchema,
 } from "@/lib/validation/ai";
-
-/**
- * The token allowance for the signed-in user.
- *
- * Limits used to be hard-coded per action and identical for everyone, so a
- * paying subscriber got exactly the free-tier allowance. Plans and
- * entitlements proper are the next step; this at least makes paying change
- * something.
- */
-async function currentTokenLimit(): Promise<number> {
-  return (await hasActiveSubscription()) ? usageLimits.pro.aiTokens : usageLimits.free.aiTokens;
-}
 
 /**
  * Record what a completion actually cost and hand back its text.
@@ -67,7 +56,8 @@ export async function generateContent(formData: FormData) {
       temperature: temperatureRaw ? Number(temperatureRaw) : undefined,
     });
 
-    await assertWithinLimit(userId, await currentTokenLimit());
+    await checkRateLimit("ai", userId, { limit: 20, windowSeconds: 60 });
+    await assertWithinLimit(userId, (await getEntitlements(userId)).aiTokenLimit);
 
     const result = await generateCompletion(validatedData.prompt, {
       model: validatedData.model,
@@ -91,7 +81,8 @@ export async function generateCode(task: string, language: string, context?: str
     const userId = await requireUserId();
     const validatedData = generateCodeSchema.parse({ task, language, context });
 
-    await assertWithinLimit(userId, await currentTokenLimit());
+    await checkRateLimit("ai", userId, { limit: 20, windowSeconds: 60 });
+    await assertWithinLimit(userId, (await getEntitlements(userId)).aiTokenLimit);
 
     const prompt = codeGenerationPrompt(
       validatedData.task,
@@ -119,7 +110,8 @@ export async function summarizeContent(content: string, maxLength?: number) {
     const userId = await requireUserId();
     const validatedData = summarizeSchema.parse({ content, maxLength });
 
-    await assertWithinLimit(userId, await currentTokenLimit());
+    await checkRateLimit("ai", userId, { limit: 20, windowSeconds: 60 });
+    await assertWithinLimit(userId, (await getEntitlements(userId)).aiTokenLimit);
 
     const prompt = summarizationPrompt(validatedData.content, validatedData.maxLength);
 
@@ -143,7 +135,8 @@ export async function translateText(text: string, targetLanguage: string) {
     const userId = await requireUserId();
     const validatedData = translateSchema.parse({ text, targetLanguage });
 
-    await assertWithinLimit(userId, await currentTokenLimit());
+    await checkRateLimit("ai", userId, { limit: 20, windowSeconds: 60 });
+    await assertWithinLimit(userId, (await getEntitlements(userId)).aiTokenLimit);
 
     const prompt = translationPrompt(validatedData.text, validatedData.targetLanguage);
 

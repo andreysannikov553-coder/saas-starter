@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { AuthenticationError } from "@/lib/utils/error";
+import { getEntitlements } from "@/lib/billing/entitlements";
 import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 
@@ -84,26 +85,16 @@ export async function requireUserId(): Promise<string> {
 }
 
 /**
- * Check if user has an active subscription.
+ * Check if user has an active (paid) subscription.
  *
- * `currentPeriodEnd` is checked as well as status: a webhook can be delayed or
- * missed, and a row left at ACTIVE past the end of its paid period should not
- * keep granting access.
+ * Delegates to `getEntitlements`, which is also what decides usage limits —
+ * previously this checked status alone while limits were computed
+ * separately, so the two could disagree about who was actually paying.
  */
 export async function hasActiveSubscription(): Promise<boolean> {
   const user = await getCurrentUser();
   if (!user) return false;
 
-  const subscription = await prisma.subscription.findUnique({
-    where: { userId: user.id },
-    select: { status: true, currentPeriodEnd: true },
-  });
-
-  if (!subscription) return false;
-  if (subscription.status !== "ACTIVE" && subscription.status !== "TRIALING") {
-    return false;
-  }
-
-  // No period end recorded yet (subscription just created) counts as active.
-  return !subscription.currentPeriodEnd || subscription.currentPeriodEnd > new Date();
+  const entitlements = await getEntitlements(user.id);
+  return entitlements.plan !== "free";
 }

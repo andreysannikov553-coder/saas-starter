@@ -3,28 +3,29 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/lib/actions/auth";
 import { LayoutDashboard, Settings, CreditCard, Sparkles, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 const routes = [
   {
-    label: "Dashboard",
+    label: "Дашборд",
     icon: LayoutDashboard,
     href: "/dashboard",
   },
   {
-    label: "AI Features",
+    label: "AI-функции",
     icon: Sparkles,
     href: "/dashboard/ai",
   },
   {
-    label: "Billing",
+    label: "Оплата",
     icon: CreditCard,
     href: "/dashboard/billing",
   },
   {
-    label: "Settings",
+    label: "Настройки",
     icon: Settings,
     href: "/dashboard/settings",
   },
@@ -58,10 +59,12 @@ export function Sidebar() {
       </nav>
       <div className="p-4">
         <Separator className="mb-4" />
-        <Button variant="ghost" className="w-full justify-start" size="sm">
-          <LogOut className="mr-2 h-4 w-4" />
-          Sign Out
-        </Button>
+        <form action={signOut}>
+          <Button type="submit" variant="ghost" className="w-full justify-start" size="sm">
+            <LogOut className="mr-2 h-4 w-4" />
+            Выйти
+          </Button>
+        </form>
       </div>
     </div>
   );

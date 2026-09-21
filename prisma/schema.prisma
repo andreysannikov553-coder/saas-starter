@@ -36,6 +36,10 @@ model Subscription {
   stripeCustomerId     String             @unique @map("stripe_customer_id")
   stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
   stripePriceId        String?            @map("stripe_price_id")
+  // Denormalized from stripePriceId via resolvePlan() at write time, so a
+  // limit check is one indexed read instead of a price-id-to-plan lookup on
+  // every request.
+  plan                 Plan               @default(FREE)
   status               SubscriptionStatus @default(INACTIVE)
   currentPeriodStart   DateTime?          @map("current_period_start")
   currentPeriodEnd     DateTime?          @map("current_period_end")
@@ -56,6 +60,12 @@ enum SubscriptionStatus {
   PAST_DUE
   CANCELED
   TRIALING
+}
+
+enum Plan {
+  FREE
+  PRO
+  BUSINESS
 }
 
 // Usage tracking for AI features
@@ -135,4 +145,19 @@ model GeneratedContent {
 
   @@index([userId, createdAt])
   @@map("generated_content")
+}
+
+// Fixed-window rate limiting.
+//
+// `key` is `<scope>:<identifier>` (e.g. "signin:1.2.3.4" or "ai:<userId>") so
+// one table serves every limiter in the app. A window is one row, upserted
+// and incremented atomically; expired windows are cheap to leave behind and
+// are swept by `cleanupRateLimits` rather than deleted per-request.
+model RateLimitHit {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("rate_limit_hits")
 }
