@@ -214,6 +214,7 @@ model Topic {
   updatedAt DateTime    @updatedAt @map("updated_at")
 
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sources Source[]
   scripts Script[]
 
   @@index([orgId, status])
@@ -228,9 +229,12 @@ enum TopicStatus {
 }
 
 // Источник для фактчека (научная публикация, обзор, официальный орган).
+// Привязан к теме, для которой его нашли: без этого claims нельзя было бы
+// отличить "источники для этой темы" от "все источники организации".
 model Source {
   id          String     @id @default(uuid())
   orgId       String     @map("org_id")
+  topicId     String     @map("topic_id")
   title       String
   url         String
   sourceType  SourceType @map("source_type")
@@ -238,9 +242,11 @@ model Source {
   createdAt   DateTime   @default(now()) @map("created_at")
 
   org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  topic  Topic        @relation(fields: [topicId], references: [id], onDelete: Cascade)
   claims Claim[]
 
   @@index([orgId])
+  @@index([topicId])
   @@map("sources")
 }
 
