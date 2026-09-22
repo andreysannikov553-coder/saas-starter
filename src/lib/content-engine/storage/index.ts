@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { env } from "@/env.mjs";
+import { withRetry } from "../observability/retry";
 
 /**
  * Storage for content-engine render artifacts (narration audio, later
@@ -31,19 +32,25 @@ export interface UploadRenderAssetOptions {
  *
  * Overwrites any existing object at `path` (`upsert: true`) — every render
  * stage is expected to be re-runnable on the same script/video id without
- * accumulating stale objects.
+ * accumulating stale objects. `upsert: true` also makes the upload itself
+ * safe to retry on a transient failure: a retried attempt just overwrites
+ * the same path again rather than creating a duplicate object.
  */
 export async function uploadRenderAsset(options: UploadRenderAssetOptions): Promise<string> {
   const supabase = getStorageClient();
 
-  const { error } = await supabase.storage.from(RENDERS_BUCKET).upload(options.path, options.data, {
-    contentType: options.contentType,
-    upsert: true,
-  });
+  await withRetry(async () => {
+    const { error } = await supabase.storage
+      .from(RENDERS_BUCKET)
+      .upload(options.path, options.data, {
+        contentType: options.contentType,
+        upsert: true,
+      });
 
-  if (error) {
-    throw new Error(`Failed to upload render asset to ${options.path}: ${error.message}`);
-  }
+    if (error) {
+      throw new Error(`Failed to upload render asset to ${options.path}: ${error.message}`);
+    }
+  });
 
   const { data } = supabase.storage.from(RENDERS_BUCKET).getPublicUrl(options.path);
   return data.publicUrl;

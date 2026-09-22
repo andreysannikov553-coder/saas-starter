@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { narrateScript, type NarrateScriptOptions } from "../tts";
 import { uploadRenderAsset } from "../storage";
+import { withStageLog } from "../observability/logger";
 
 export interface RenderNarrationOptions extends Omit<NarrateScriptOptions, "provider"> {
   provider?: NarrateScriptOptions["provider"];
@@ -27,33 +28,40 @@ export async function renderNarrationForScript(
   scriptId: string,
   options: RenderNarrationOptions
 ): Promise<RenderNarrationResult> {
-  const script = await prisma.script.findUnique({ where: { id: scriptId } });
-  if (!script) {
-    throw new Error(`Script ${scriptId} not found`);
-  }
+  return withStageLog(
+    "narrate-video",
+    { scriptId },
+    async () => {
+      const script = await prisma.script.findUnique({ where: { id: scriptId } });
+      if (!script) {
+        throw new Error(`Script ${scriptId} not found`);
+      }
 
-  const narration = await narrateScript(scriptId, options);
+      const narration = await narrateScript(scriptId, options);
 
-  const video = await prisma.video.findFirst({
-    where: { scriptId: script.id, status: "QUEUED" },
-    orderBy: { createdAt: "desc" },
-  });
+      const video = await prisma.video.findFirst({
+        where: { scriptId: script.id, status: "QUEUED" },
+        orderBy: { createdAt: "desc" },
+      });
 
-  const videoId =
-    video?.id ??
-    (
-      await prisma.video.create({
-        data: { orgId: script.orgId, scriptId: script.id },
-      })
-    ).id;
+      const videoId =
+        video?.id ??
+        (
+          await prisma.video.create({
+            data: { orgId: script.orgId, scriptId: script.id },
+          })
+        ).id;
 
-  const audioUrl = await uploadRenderAsset({
-    path: `${script.orgId}/${videoId}/narration.mp3`,
-    data: narration.audio,
-    contentType: narration.mimeType,
-  });
+      const audioUrl = await uploadRenderAsset({
+        path: `${script.orgId}/${videoId}/narration.mp3`,
+        data: narration.audio,
+        contentType: narration.mimeType,
+      });
 
-  await prisma.video.update({ where: { id: videoId }, data: { audioUrl } });
+      await prisma.video.update({ where: { id: videoId }, data: { audioUrl } });
 
-  return { videoId, audioUrl };
+      return { videoId, audioUrl };
+    },
+    (result) => ({ ...result })
+  );
 }
