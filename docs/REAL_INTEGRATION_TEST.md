@@ -152,11 +152,46 @@ a hypothesis, not a confirmed root cause. **No code change was made** — per
 PHASE 1 scope, this is reported for Andrey's decision, not fixed
 unilaterally.
 
+### 4.3 Third attempt — English topic title, real Anthropic key — 2026-09-22
+
+Re-ran with an English topic title to test the §4.2 hypothesis:
+
+```
+npx tsx --env-file=.env.local scripts/run-pipeline.ts "How sleep affects muscle recovery after exercise"
+```
+
+Result: **research found 25 sources this time** (`"found":25,"created":25,"skipped":0`)
+— confirming the hypothesis: Europe PMC's index is English-language, and the
+Russian-language default title matched nothing.
+
+Claim extraction then made a real call to `api.anthropic.com` (progress —
+this is a different, later failure than before) and got a real, honest
+error back from Anthropic itself:
+
+```json
+{
+  "type": "error",
+  "error": {
+    "type": "invalid_request_error",
+    "message": "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. Add the header, or use an API key that is scoped to a workspace."
+  }
+}
+```
+
+The `ANTHROPIC_API_KEY` supplied is an organization-level key, not scoped to
+a specific workspace. Fixing this needs either (a) a new key created against
+a specific workspace in the Anthropic console, or (b) sending an
+`anthropic-workspace-id` header alongside the existing key — a code change,
+not attempted here per PHASE 1 scope (no code changes beyond what's strictly
+needed to run the existing pipeline). **Per Andrey's decision, PHASE 1 stops
+here** rather than continuing to chase key/workspace configuration.
+
 ### A. REAL VERIFIED
 
 - **Database connectivity** (Andrey's Mac, real Supabase Postgres): `prisma db push` succeeded; `run-pipeline.ts` created real `Organization`/`Topic` rows.
 - **Test suite** (Andrey's Mac, Node v22): `npm test` — 73/73 passed, 0 failed.
-- **Research stage / Europe PMC reachability** (Andrey's Mac): the HTTPS call to Europe PMC completed without error — reachability and the stage's own success/failure logging are confirmed real. The _result_ (0 sources) is real but likely explained by an English-only search index receiving a Russian query — see above.
+- **Research stage / Europe PMC** (Andrey's Mac, English topic title): 25 real sources found and created — full real success, not just reachability.
+- **Anthropic API reachability** (Andrey's Mac): a real HTTPS call reached `api.anthropic.com` and got a real (non-network) error back — confirms the key and network path work; the remaining blocker is workspace scoping, not connectivity.
 
 ### B. MOCK VERIFIED
 
@@ -167,14 +202,14 @@ _(none — this test intentionally does not use mocks; see the existing `*.test.
 | Stage                               | Real/Mock                                                | Input                        | Output                    | Status           | Error                                                                                                                                                                                                                         | Next action                                                                                                                                  |
 | ----------------------------------- | -------------------------------------------------------- | ---------------------------- | ------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Database connectivity               | **Real — verified (§4.2)**                               | `DATABASE_URL` from env      | Organization + Topic rows | ✅ **Verified**  | —                                                                                                                                                                                                                             | —                                                                                                                                            |
-| Research (Europe PMC)               | **Real — reachability verified (§4.2), 0 results**       | Topic title (Russian)        | Source rows               | ⚠️ **Partial**   | No network/API error; query likely mismatched (Russian text against an English-language index) — see §4.2 hypothesis                                                                                                          | Re-run with an English topic title to confirm the hypothesis; Andrey to decide whether to add a translation step before querying             |
-| Claim extraction                    | Real (attempted)                                         | Source rows                  | Claim rows                | **Not verified** | Never reached — pipeline stopped at `research` with 0 sources (no claims to extract without sources)                                                                                                                          | Requires the research stage to actually produce sources first                                                                                |
+| Research (Europe PMC)               | **Real — verified (§4.3)**                               | Topic title (English)        | Source rows               | ✅ **Verified**  | —                                                                                                                                                                                                                             | Andrey to decide whether topics will always be authored in English, or whether a translation step is needed for Russian topic titles         |
+| Claim extraction                    | **Real — attempted (§4.3)**                              | Source rows                  | Claim rows                | **Not verified** | Anthropic API reached, but the key is not scoped to a workspace (`invalid_request_error`, see §4.3) — a real Anthropic-account configuration issue, not a network or code problem                                             | Andrey to create a workspace-scoped Anthropic API key (or add `anthropic-workspace-id` support in code) when ready to continue               |
 | Script generation                   | Real (attempted)                                         | Claim rows                   | Script + beats            | **Not verified** | Same as above                                                                                                                                                                                                                 | Same as above                                                                                                                                |
 | Hook generation                     | Real (attempted)                                         | Script                       | Hook rows + scores        | **Not verified** | Same as above                                                                                                                                                                                                                 | Same as above                                                                                                                                |
 | Voice (ElevenLabs narration)        | Real (attempted)                                         | Script text                  | Audio bytes               | **Not verified** | Blocked by both missing `DATABASE_URL` and network egress policy                                                                                                                                                              | Needs `DATABASE_URL`, `ELEVENLABS_API_KEY`, **and** network access to `api.elevenlabs.io` — not available in this sandbox regardless of keys |
 | Storage (Supabase upload)           | Real (attempted)                                         | Audio bytes                  | Public URL                | **Not verified** | Blocked by missing `DATABASE_URL`/Supabase keys; not yet reached                                                                                                                                                              | Supply `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`                                                               |
 | Telegram adapter (dry-run)          | Real (attempted, `buildTelegramPublishPayload`, no send) | Video + PlatformAccount rows | Payload preview (no send) | **Not verified** | Blocked by missing `DATABASE_URL`; separately, `api.telegram.org` is network-blocked even once a bot token exists — irrelevant for the dry-run path itself (it never calls Telegram), but relevant for a later real-send test | Supply `DATABASE_URL` + a `PlatformAccount` row with a Telegram bot token in `credentials`                                                   |
-| Orchestrator (`runContentPipeline`) | **Real — verified (§4.2)**                               | Topic id                     | Pipeline result           | ✅ **Verified**  | —                                                                                                                                                                                                                             | The orchestrator itself ran correctly end to end and stopped exactly where its own gate says it should                                       |
+| Orchestrator (`runContentPipeline`) | **Real — verified (§4.2, §4.3)**                         | Topic id                     | Pipeline result           | ✅ **Verified**  | —                                                                                                                                                                                                                             | The orchestrator itself ran correctly end to end and stopped exactly where its own gate says it should                                       |
 
 ## 5. Status after running outside the sandbox
 
@@ -185,16 +220,20 @@ own Mac instead, per §3's own conclusion. Outcome, in order:
 1. `npx prisma db push` — real Supabase Postgres, succeeded.
 2. `npm test` — 73/73 tests passed (required upgrading Node from v20 to v22
    locally, since the test runner's `--test` glob needs Node 22+).
-3. `npx tsx --env-file=.env.local scripts/run-pipeline.ts` — real
+3. First `run-pipeline.ts` run (Russian default topic title) — real
    `Organization`/`Topic` created in Supabase, a real HTTPS call reached
    Europe PMC, and the pipeline honestly stopped at `research` with 0
-   sources found (see §4.2 for the likely cause — a Russian-language query
-   against an English-language research index).
+   sources found.
+4. Second run (English topic title) — confirmed the language hypothesis:
+   **25 real sources found and created.** Claim extraction then made a real
+   call to Anthropic and got a real configuration error back: the API key
+   is not scoped to a workspace (see §4.3).
 
-This satisfies "the first successful dry-run" per Andrey's instruction: real
-infrastructure end to end, an honest stop with a clear, non-simulated
-reason, no secrets committed. Per instruction, **stopping here** — not
-proceeding to claim extraction/script/hooks/voice/Telegram, and not changing
-the research query logic — pending Andrey's direction on whether to
-investigate the 0-results research query (e.g. an English test topic, or a
-translation step) or move on to something else.
+**This satisfies "the first successful dry-run" per Andrey's instruction:**
+real infrastructure end to end (database, Europe PMC, Anthropic reachability
+all independently confirmed real), an honest stop with a clear, non-simulated
+reason, no secrets committed. Per Andrey's explicit decision in this session,
+**PHASE 1 stops here** — not proceeding to claim extraction/script/hooks/
+voice/Telegram, and not changing any pipeline code (including the research
+query language and the workspace-scoping issue) — pending Andrey's direction
+on whether/when to supply a workspace-scoped Anthropic key and continue.
