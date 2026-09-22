@@ -14,14 +14,22 @@ import type { LLMProvider, StructuredRequest } from "../llm/types";
  * together correctly, not that it works against a real database.
  */
 
+interface FakeExistingScript {
+  id: string;
+  topicId: string;
+  templateSlug: string | null;
+  beats: { claimId: string | null }[];
+}
+
 interface FakeState {
   topic: { id: string; orgId: string; title: string } | null;
   claims: { id: string; text: string; evidenceLevel: string; hedgePhrase: string | null }[];
+  existingScripts: FakeExistingScript[];
   created: Record<string, unknown>[];
   updated: Record<string, unknown>[];
 }
 
-const state: FakeState = { topic: null, claims: [], created: [], updated: [] };
+const state: FakeState = { topic: null, claims: [], existingScripts: [], created: [], updated: [] };
 
 mock.module("@/lib/db", {
   namedExports: {
@@ -37,6 +45,8 @@ mock.module("@/lib/db", {
         findMany: async () => state.claims,
       },
       script: {
+        findFirst: async (args: { where: { topicId: string } }) =>
+          state.existingScripts.find((s) => s.topicId === args.where.topicId) ?? null,
         create: async (args: { data: Record<string, unknown> }) => {
           state.created.push(args.data);
           const beatsInput = (args.data.beats as { create: Record<string, unknown>[] }).create;
@@ -69,6 +79,7 @@ function fakeProvider(script: unknown): LLMProvider {
 test("generateScriptForTopic persists a script when the topic has claims", async () => {
   state.topic = { id: "topic-1", orgId: "org-1", title: "Sleep and longevity" };
   state.claims = [{ id: "claim-1", text: "X helps Y", evidenceLevel: "A", hedgePhrase: null }];
+  state.existingScripts = [];
   state.created = [];
   state.updated = [];
 
@@ -95,6 +106,7 @@ test("generateScriptForTopic persists a script when the topic has claims", async
 test("generateScriptForTopic refuses a topic with no claims", async () => {
   state.topic = { id: "topic-2", orgId: "org-1", title: "Empty topic" };
   state.claims = [];
+  state.existingScripts = [];
 
   await assert.rejects(
     () => generateScriptForTopic("topic-2", { provider: fakeProvider({}) }),
@@ -105,9 +117,33 @@ test("generateScriptForTopic refuses a topic with no claims", async () => {
 test("generateScriptForTopic throws when the topic does not exist", async () => {
   state.topic = null;
   state.claims = [];
+  state.existingScripts = [];
 
   await assert.rejects(
     () => generateScriptForTopic("missing-topic", { provider: fakeProvider({}) }),
     /Topic missing-topic not found/
   );
+});
+
+test("generateScriptForTopic reuses an existing script instead of creating a duplicate (regression)", async () => {
+  state.topic = { id: "topic-3", orgId: "org-1", title: "Already scripted topic" };
+  state.claims = [{ id: "claim-1", text: "X helps Y", evidenceLevel: "A", hedgePhrase: null }];
+  state.existingScripts = [
+    {
+      id: "existing-script-1",
+      topicId: "topic-3",
+      templateSlug: "mechanism-explainer",
+      beats: [{ claimId: "claim-1" }, { claimId: null }],
+    },
+  ];
+  state.created = [];
+  state.updated = [];
+
+  const result = await generateScriptForTopic("topic-3", { provider: fakeProvider({}) });
+
+  assert.equal(result.scriptId, "existing-script-1");
+  assert.equal(result.templateSlug, "mechanism-explainer");
+  assert.equal(result.beatCount, 2);
+  assert.equal(result.citedClaims, 1);
+  assert.deepEqual(state.created, []);
 });

@@ -46,6 +46,12 @@ export interface GenerateHooksResult {
  * the caller (or a human) that even the best variant scored under the
  * threshold, so the script should go back for a rewrite rather than move
  * on to rendering. This stage only scores; it doesn't loop or rewrite.
+ *
+ * Reuses existing Hook rows for this script if any exist, rather than
+ * calling the LLM again and creating a duplicate set — a bare `create()`
+ * here would otherwise duplicate on every pipeline re-run for a script that
+ * already has hooks (same class of bug fixed for claim extraction in the
+ * pipeline orchestrator).
  */
 export async function generateHooksForScript(
   scriptId: string,
@@ -57,6 +63,19 @@ export async function generateHooksForScript(
   });
   if (!script) {
     throw new Error(`Script ${scriptId} not found`);
+  }
+
+  const existingHooks = await prisma.hook.findMany({ where: { scriptId: script.id } });
+  if (existingHooks.length > 0) {
+    const bestScore = Math.max(
+      ...existingHooks.map((h) => (h.score as { total?: number } | null)?.total ?? 0)
+    );
+    return {
+      scriptId: script.id,
+      hookIds: existingHooks.map((h) => h.id),
+      bestScore,
+      belowThreshold: bestScore < HOOK_SCORE_THRESHOLD,
+    };
   }
 
   const provider = options.provider ?? getLLMProvider();

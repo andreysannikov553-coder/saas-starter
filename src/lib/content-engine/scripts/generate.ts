@@ -48,6 +48,12 @@ export interface GenerateScriptResult {
  * extractClaimsForSource) — a topic with no claims yet is refused rather than
  * generating an unfounded script, since an empty claim list would otherwise
  * silently produce a script with no factual grounding at all.
+ *
+ * Reuses an existing Script for this topic if one exists, rather than calling
+ * the LLM again and creating a duplicate Script+ScriptBeat set — a bare
+ * `create()` here would otherwise duplicate on every pipeline re-run for a
+ * topic that already has a script (the same class of bug fixed for claim
+ * extraction in the pipeline orchestrator).
  */
 export async function generateScriptForTopic(
   topicId: string,
@@ -56,6 +62,20 @@ export async function generateScriptForTopic(
   const topic = await prisma.topic.findUnique({ where: { id: topicId } });
   if (!topic) {
     throw new Error(`Topic ${topicId} not found`);
+  }
+
+  const existingScript = await prisma.script.findFirst({
+    where: { topicId: topic.id },
+    include: { beats: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (existingScript) {
+    return {
+      scriptId: existingScript.id,
+      templateSlug: existingScript.templateSlug ?? "unknown",
+      beatCount: existingScript.beats.length,
+      citedClaims: existingScript.beats.filter((b) => b.claimId !== null).length,
+    };
   }
 
   const claims = await prisma.claim.findMany({
