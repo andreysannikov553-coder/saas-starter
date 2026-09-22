@@ -9,6 +9,11 @@ export const env = createEnv({
     // OpenAI
     OPENAI_API_KEY: z.string().min(1),
 
+    // Anthropic (content engine — optional: required only when
+    // LLM_PROVIDER is "claude", the default)
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    LLM_PROVIDER: z.enum(["claude", "openai"]).default("claude"),
+
     // Stripe
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
@@ -37,6 +42,8 @@ export const env = createEnv({
     // Server
     DATABASE_URL: process.env.DATABASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    LLM_PROVIDER: process.env.LLM_PROVIDER,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STRIPE_PRICE_ID_PRO: process.env.STRIPE_PRICE_ID_PRO,
