@@ -63,4 +63,3 @@ export const SUCCESS_MESSAGES = {
   SUBSCRIPTION_CREATED: "Subscription created successfully",
   SUBSCRIPTION_CANCELED: "Subscription canceled successfully",
 } as const;
-

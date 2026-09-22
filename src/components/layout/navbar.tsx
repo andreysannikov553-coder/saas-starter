@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 
 export function Navbar() {
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
       <div className="container flex h-14 items-center">
         <div className="mr-4 flex">
           <Link href="/" className="mr-6 flex items-center space-x-2">
@@ -12,13 +12,13 @@ export function Navbar() {
           <nav className="hidden items-center space-x-6 text-sm font-medium md:flex">
             <Link
               href="/pricing"
-              className="transition-colors hover:text-foreground/80 text-foreground/60"
+              className="hover:text-foreground/80 text-foreground/60 transition-colors"
             >
               Pricing
             </Link>
             <Link
               href="/dashboard"
-              className="transition-colors hover:text-foreground/80 text-foreground/60"
+              className="hover:text-foreground/80 text-foreground/60 transition-colors"
             >
               Dashboard
             </Link>
@@ -38,4 +38,3 @@ export function Navbar() {
     </header>
   );
 }
-

@@ -20,19 +20,13 @@ the tone and context of the original text.`,
  * Template for content generation
  */
 export function contentGenerationPrompt(topic: string, style?: string): string {
-  return `Generate engaging content about: ${topic}${
-    style ? `\nStyle: ${style}` : ""
-  }`;
+  return `Generate engaging content about: ${topic}${style ? `\nStyle: ${style}` : ""}`;
 }
 
 /**
  * Template for code generation
  */
-export function codeGenerationPrompt(
-  task: string,
-  language: string,
-  context?: string
-): string {
+export function codeGenerationPrompt(task: string, language: string, context?: string): string {
   return `Generate ${language} code for the following task:
 
 Task: ${task}
@@ -45,9 +39,7 @@ Please provide clean, well-commented code with best practices.`;
  * Template for summarization
  */
 export function summarizationPrompt(content: string, maxLength?: number): string {
-  return `Summarize the following content${
-    maxLength ? ` in about ${maxLength} words` : ""
-  }:
+  return `Summarize the following content${maxLength ? ` in about ${maxLength} words` : ""}:
 
 ${content}`;
 }
@@ -60,4 +52,3 @@ export function translationPrompt(text: string, targetLanguage: string): string 
 
 ${text}`;
 }
-

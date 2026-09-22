@@ -1,0 +1,49 @@
+name: CI
+
+# No `branches:` filter on pull_request: this repo stacks PRs on top of
+# each other (feature branches based on other feature branches, not just on
+# main), and a branch filter here would silently skip CI on exactly those.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Placeholder values, not real credentials: `next build` needs every env var
+# declared in src/env.mjs to be present and shaped correctly (a URL, a
+# non-empty string) to pass validation, but nothing in a type-check/lint/build
+# run actually calls Supabase, Stripe or OpenAI.
+env:
+  DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+  NEXT_PUBLIC_SUPABASE_URL: "https://ci.supabase.co"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-anon-key"
+  SUPABASE_SERVICE_ROLE_KEY: "ci-service-role-key"
+  STRIPE_SECRET_KEY: "sk_test_ci"
+  STRIPE_WEBHOOK_SECRET: "whsec_ci"
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_ci"
+  OPENAI_API_KEY: "sk-ci"
+  NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Build
+        run: npm run build

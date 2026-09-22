@@ -20,4 +20,3 @@ export const updateSubscriptionSchema = z.object({
 export type CreateCheckoutSessionInput = z.infer<typeof createCheckoutSessionSchema>;
 export type CancelSubscriptionInput = z.infer<typeof cancelSubscriptionSchema>;
 export type UpdateSubscriptionInput = z.infer<typeof updateSubscriptionSchema>;
-

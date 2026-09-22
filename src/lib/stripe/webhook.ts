@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { env } from "@/env.mjs";
 import { logger } from "@/lib/utils/logger";
 import type { Prisma } from "@prisma/client";
+import { resolvePlan } from "@/lib/stripe/pricing";
 import type Stripe from "stripe";
 
 /**
@@ -133,9 +134,11 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Prom
   }
 
   const status = mapStripeStatus(subscription.status);
+  const priceId = subscription.items.data[0]?.price.id ?? null;
   const fields = {
     stripeSubscriptionId: subscription.id,
-    stripePriceId: subscription.items.data[0]?.price.id ?? null,
+    stripePriceId: priceId,
+    plan: resolvePlan(priceId).id.toUpperCase() as "FREE" | "PRO" | "BUSINESS",
     status,
     currentPeriodStart: new Date(subscription.current_period_start * 1000),
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),

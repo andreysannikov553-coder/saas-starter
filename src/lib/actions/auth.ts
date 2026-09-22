@@ -13,6 +13,7 @@ import {
   newPasswordSchema,
 } from "@/lib/validation/auth";
 import { AFTER_LOGIN_ROUTE } from "@/lib/routes";
+import { checkRateLimit, requestIp } from "@/lib/rate-limit";
 import { env } from "@/env.mjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -54,6 +55,8 @@ export async function signIn(
   let destination: string;
 
   try {
+    await checkRateLimit("signin", await requestIp(), { limit: 10, windowSeconds: 60 });
+
     const parsed = signInSchema.safeParse({
       email: formData.get("email"),
       password: formData.get("password"),
@@ -99,6 +102,8 @@ export async function signUp(
   let needsEmailConfirmation = false;
 
   try {
+    await checkRateLimit("signup", await requestIp(), { limit: 5, windowSeconds: 60 });
+
     const parsed = signUpSchema.safeParse({
       email: formData.get("email"),
       password: formData.get("password"),
@@ -182,6 +187,8 @@ export async function requestPasswordReset(
   };
 
   try {
+    await checkRateLimit("password-reset", await requestIp(), { limit: 5, windowSeconds: 300 });
+
     const parsed = resetPasswordSchema.safeParse({ email: formData.get("email") });
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Укажите корректный email" };
@@ -215,6 +222,8 @@ export async function changePassword(
   formData: FormData
 ): Promise<AuthFormState> {
   try {
+    await checkRateLimit("change-password", await requestIp(), { limit: 5, windowSeconds: 300 });
+
     const parsed = changePasswordSchema.safeParse({
       currentPassword: formData.get("currentPassword"),
       newPassword: formData.get("newPassword"),
