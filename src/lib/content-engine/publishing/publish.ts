@@ -52,13 +52,19 @@ export async function publishVideoToTelegram(
     );
   }
 
-  const publication = await prisma.publication.create({
-    data: {
+  // Publication has a unique(videoId, platformAccountId) constraint (PR #1) so a
+  // pipeline re-run for the same video+account doesn't create a duplicate row — a
+  // bare create() would throw on retry after a FAILED attempt. upsert() resets an
+  // existing row back to PENDING instead.
+  const publication = await prisma.publication.upsert({
+    where: { videoId_platformAccountId: { videoId: video.id, platformAccountId: account.id } },
+    create: {
       orgId: video.orgId,
       videoId: video.id,
       platformAccountId: account.id,
       status: "PENDING",
     },
+    update: { status: "PENDING" },
   });
 
   const caption = options.text ?? buildCaption(video.script.beats);
