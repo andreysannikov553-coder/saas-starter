@@ -21,9 +21,10 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  subscription Subscription?
-  usage        Usage[]
-  apiKeys      ApiKey[]
+  subscription     Subscription?
+  usage            Usage[]
+  apiKeys          ApiKey[]
+  generatedContent GeneratedContent[]
 
   @@map("users")
 }
@@ -45,6 +46,7 @@ model Subscription {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([stripeSubscriptionId])
   @@map("subscriptions")
 }
 
@@ -97,16 +99,23 @@ model ApiKey {
   @@map("api_keys")
 }
 
-// Webhook events for tracking Stripe webhooks
+// Webhook events for tracking Stripe webhooks.
+//
+// `id` is the provider's own event id (Stripe `evt_...`), not a generated
+// uuid: the primary key IS the deduplication guarantee. Stripe delivers
+// at-least-once, so the same event arrives more than once in normal
+// operation and must not be applied twice.
 model WebhookEvent {
-  id        String   @id @default(uuid())
-  type      String
-  data      Json
-  processed Boolean  @default(false)
-  error     String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String    @id
+  type        String
+  data        Json
+  processed   Boolean   @default(false)
+  processedAt DateTime? @map("processed_at")
+  error       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([type, processed])
+  @@index([createdAt])
   @@map("webhook_events")
 }
 
@@ -120,6 +129,9 @@ model GeneratedContent {
   tokens    Int
   metadata  Json?
   createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@map("generated_content")

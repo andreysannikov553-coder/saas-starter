@@ -1,59 +1,31 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import type { Metadata } from "next";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoginForm } from "@/components/auth/login-form";
 
-async function handleSignIn(formData: FormData) {
-  "use server";
-  const { signIn } = await import("@/lib/actions/auth");
-  await signIn(formData);
-}
+export const metadata: Metadata = {
+  title: "Вход",
+};
 
-export default function LoginPage() {
+const LINK_ERRORS: Record<string, string> = {
+  missing_code: "Ссылка недействительна. Запросите новую.",
+  invalid_link: "Ссылка устарела или уже использована. Запросите новую.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; error?: string }>;
+}) {
+  const { next, error } = await searchParams;
+
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Sign In</CardTitle>
-          <CardDescription>Enter your credentials to access your account</CardDescription>
+          <CardTitle>Вход</CardTitle>
+          <CardDescription>Войдите, чтобы продолжить работу</CardDescription>
         </CardHeader>
-        <form action={handleSignIn}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="your.email@example.com"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full">
-              Sign In
-            </Button>
-            <p className="text-muted-foreground text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link href="/signup" className="text-primary font-medium hover:underline">
-                Sign up
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
+        <LoginForm next={next} notice={error ? LINK_ERRORS[error] : undefined} />
       </Card>
     </div>
   );

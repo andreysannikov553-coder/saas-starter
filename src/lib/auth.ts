@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
+import { AuthenticationError } from "@/lib/utils/error";
 import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 
@@ -31,24 +33,77 @@ export async function getSession() {
 export async function requireAuth(): Promise<User> {
   const user = await getCurrentUser();
   if (!user) {
-    throw new Error("Unauthorized");
+    throw new AuthenticationError();
   }
   return user;
 }
 
 /**
- * Check if user has an active subscription
+ * Make sure the signed-in Supabase identity has a matching `users` row.
+ *
+ * Supabase Auth is the source of truth for identity; this table holds the
+ * profile and the relations hanging off it. Creating the row at sign-up time
+ * meant two writes to two systems with no transaction between them, so a
+ * failure on the second left an account that could sign in but had no profile
+ * — permanently, since sign-up never ran again for that user.
+ *
+ * Doing it here instead makes it a reconciliation step: idempotent, and it
+ * repairs a missing row on the next request rather than failing forever.
+ */
+export const ensureUserRecord = cache(async (): Promise<string | null> => {
+  const user = await getCurrentUser();
+  if (!user?.email) return null;
+
+  const name = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined;
+  const avatarUrl =
+    typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : undefined;
+
+  await prisma.user.upsert({
+    where: { id: user.id },
+    create: {
+      id: user.id,
+      email: user.email,
+      name,
+      avatarUrl,
+    },
+    // Email is authoritative in Supabase, so keep it in sync. Name and avatar
+    // are editable in settings, so an existing row keeps whatever it has.
+    update: { email: user.email },
+  });
+
+  return user.id;
+});
+
+/**
+ * The authenticated user's id, with their `users` row guaranteed to exist.
+ */
+export async function requireUserId(): Promise<string> {
+  const user = await requireAuth();
+  await ensureUserRecord();
+  return user.id;
+}
+
+/**
+ * Check if user has an active subscription.
+ *
+ * `currentPeriodEnd` is checked as well as status: a webhook can be delayed or
+ * missed, and a row left at ACTIVE past the end of its paid period should not
+ * keep granting access.
  */
 export async function hasActiveSubscription(): Promise<boolean> {
   const user = await getCurrentUser();
   if (!user) return false;
 
-  // TODO: Implement subscription check with Prisma
-  // const subscription = await prisma.subscription.findUnique({
-  //   where: { userId: user.id },
-  // });
-  // return subscription?.status === "ACTIVE";
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId: user.id },
+    select: { status: true, currentPeriodEnd: true },
+  });
 
-  return false;
+  if (!subscription) return false;
+  if (subscription.status !== "ACTIVE" && subscription.status !== "TRIALING") {
+    return false;
+  }
+
+  // No period end recorded yet (subscription just created) counts as active.
+  return !subscription.currentPeriodEnd || subscription.currentPeriodEnd > new Date();
 }
-

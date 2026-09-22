@@ -1,152 +1,321 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/db";
-import { handleServerAction } from "@/lib/utils/error";
-import { signInSchema, signUpSchema, resetPasswordSchema } from "@/lib/validation/auth";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { ensureUserRecord } from "@/lib/auth";
+import { AppError, AuthenticationError, toUserMessage } from "@/lib/utils/error";
+import { logger } from "@/lib/utils/logger";
+import {
+  signInSchema,
+  signUpSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  newPasswordSchema,
+} from "@/lib/validation/auth";
+import { AFTER_LOGIN_ROUTE } from "@/lib/routes";
+import { env } from "@/env.mjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 /**
- * Sign in with email and password
+ * Shape returned to `useActionState` on the client.
+ *
+ * `null` is the initial state. A successful sign-in never returns — it
+ * redirects — so a returned state always means something the user must read.
  */
-export async function signIn(formData: FormData) {
-  return handleServerAction(async () => {
-    const rawData = {
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-    };
+export type AuthFormState = {
+  error?: string;
+  message?: string;
+  fieldErrors?: Record<string, string>;
+} | null;
 
-    const validatedData = signInSchema.parse(rawData);
-
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithPassword(validatedData);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    revalidatePath("/", "layout");
-    redirect("/dashboard");
-  });
+/**
+ * Only follow a redirect target that points back into this app, so a crafted
+ * `?next=https://evil.example` cannot turn our login into an open redirect.
+ */
+function safeRedirectTarget(next: unknown): string {
+  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//")) {
+    return AFTER_LOGIN_ROUTE;
+  }
+  return next;
 }
 
 /**
- * Sign up with email and password
+ * Sign in with email and password.
+ *
+ * `redirect()` is deliberately called outside the try/catch: it works by
+ * throwing, and catching it would turn a successful sign-in into an error
+ * message.
  */
-export async function signUp(formData: FormData) {
-  return handleServerAction(async () => {
-    const rawData = {
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-      name: formData.get("name") as string,
-    };
+export async function signIn(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  let destination: string;
 
-    const validatedData = signUpSchema.parse(rawData);
+  try {
+    const parsed = signInSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
+
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Проверьте введённые данные" };
+    }
+
+    const supabase = await createClient();
+    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+
+    if (error) {
+      // Supabase does not distinguish "no such user" from "wrong password" and
+      // neither should we — that difference is an account-enumeration oracle.
+      logger.warn("Failed sign-in attempt", error.message);
+      return { error: "Неверный email или пароль" };
+    }
+
+    await ensureUserRecord();
+    destination = safeRedirectTarget(formData.get("next"));
+  } catch (error) {
+    logger.error("Sign-in failed", error);
+    return { error: toUserMessage(error) };
+  }
+
+  revalidatePath("/", "layout");
+  redirect(destination);
+}
+
+/**
+ * Sign up with email and password.
+ *
+ * The local `users` row is not created here. Supabase Auth is the source of
+ * truth for identity, and writing to two systems without a transaction means
+ * a failed second write leaves an account that can sign in but has no profile.
+ * `ensureUserRecord` reconciles the two on first authenticated request.
+ */
+export async function signUp(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  let needsEmailConfirmation = false;
+
+  try {
+    const parsed = signUpSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+      name: formData.get("name"),
+    });
+
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        error: issue?.message ?? "Проверьте введённые данные",
+        fieldErrors: issue?.path.length ? { [issue.path.join(".")]: issue.message } : undefined,
+      };
+    }
 
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signUp({
-      email: validatedData.email,
-      password: validatedData.password,
+      email: parsed.data.email,
+      password: parsed.data.password,
       options: {
-        data: {
-          name: validatedData.name,
-        },
+        data: { name: parsed.data.name },
+        emailRedirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback`,
       },
     });
 
     if (error) {
-      throw new Error(error.message);
+      logger.warn("Failed sign-up attempt", error.message);
+      return { error: error.message };
     }
 
-    if (data.user) {
-      // Create user in database
-      await prisma.user.create({
-        data: {
-          id: data.user.id,
-          email: validatedData.email,
-          name: validatedData.name,
-        },
-      });
-    }
+    // With email confirmation on (the Supabase default) a user comes back with
+    // no session. Sending them to the dashboard would just bounce them to the
+    // login page with no explanation.
+    needsEmailConfirmation = !data.session;
 
-    revalidatePath("/", "layout");
-    redirect("/dashboard");
-  });
+    if (!needsEmailConfirmation) {
+      await ensureUserRecord();
+    }
+  } catch (error) {
+    logger.error("Sign-up failed", error);
+    return { error: toUserMessage(error) };
+  }
+
+  if (needsEmailConfirmation) {
+    return {
+      message:
+        "Аккаунт создан. Мы отправили письмо со ссылкой для подтверждения — откройте его, чтобы войти.",
+    };
+  }
+
+  revalidatePath("/", "layout");
+  redirect(AFTER_LOGIN_ROUTE);
 }
 
 /**
  * Sign out
  */
-export async function signOut() {
-  return handleServerAction(async () => {
+export async function signOut(): Promise<void> {
+  try {
     const supabase = await createClient();
     await supabase.auth.signOut();
+  } catch (error) {
+    logger.error("Sign-out failed", error);
+  }
 
-    revalidatePath("/", "layout");
-    redirect("/");
-  });
+  revalidatePath("/", "layout");
+  redirect("/");
 }
 
 /**
- * Send password reset email
+ * Send password reset email.
+ *
+ * The response is identical whether or not the address exists, so this cannot
+ * be used to find out who has an account.
  */
-export async function resetPassword(formData: FormData) {
-  return handleServerAction(async () => {
-    const rawData = {
-      email: formData.get("email") as string,
-    };
+export async function requestPasswordReset(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  const confirmation = {
+    message: "Если такой аккаунт существует, мы отправили на него письмо со ссылкой.",
+  };
 
-    const validatedData = resetPasswordSchema.parse(rawData);
+  try {
+    const parsed = resetPasswordSchema.safeParse({ email: formData.get("email") });
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Укажите корректный email" };
+    }
 
     const supabase = await createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(validatedData.email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/reset-password`,
+    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+      redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/reset-password`,
     });
 
     if (error) {
-      throw new Error(error.message);
+      logger.warn("Password reset request failed", error.message);
     }
+  } catch (error) {
+    logger.error("Password reset request failed", error);
+  }
 
-    return { success: true };
-  });
+  return confirmation;
 }
 
 /**
- * Update password
+ * Change the password of the currently authenticated user.
+ *
+ * The current password is verified against a throwaway Supabase client with
+ * `persistSession: false`. Verifying it on the request-scoped client — as this
+ * previously did — signs the user in again as a side effect and rewrites the
+ * session cookie in the middle of a settings save.
  */
-export async function updatePassword(currentPassword: string, newPassword: string) {
-  return handleServerAction(async () => {
-    const supabase = await createClient();
+export async function changePassword(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  try {
+    const parsed = changePasswordSchema.safeParse({
+      currentPassword: formData.get("currentPassword"),
+      newPassword: formData.get("newPassword"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
 
-    // Verify current password by attempting to sign in
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        error: issue?.message ?? "Проверьте введённые данные",
+        fieldErrors: issue?.path.length ? { [issue.path.join(".")]: issue.message } : undefined,
+      };
+    }
+
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user?.email) {
-      throw new Error("User not found");
+      throw new AuthenticationError("Сессия истекла. Войдите заново.");
     }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const verifier = createSupabaseClient(
+      env.NEXT_PUBLIC_SUPABASE_URL,
+      env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
+    const { error: verifyError } = await verifier.auth.signInWithPassword({
       email: user.email,
-      password: currentPassword,
+      password: parsed.data.currentPassword,
     });
 
-    if (signInError) {
-      throw new Error("Current password is incorrect");
+    if (verifyError) {
+      return {
+        error: "Текущий пароль указан неверно",
+        fieldErrors: { currentPassword: "Текущий пароль указан неверно" },
+      };
     }
 
-    // Update password
     const { error } = await supabase.auth.updateUser({
-      password: newPassword,
+      password: parsed.data.newPassword,
     });
 
     if (error) {
-      throw new Error(error.message);
+      throw new AppError(error.message, 400);
     }
+  } catch (error) {
+    logger.error("Password change failed", error);
+    return { error: toUserMessage(error) };
+  }
 
-    return { success: true };
-  });
+  return { message: "Пароль обновлён." };
 }
 
+/**
+ * Set a new password using the session created by a reset link.
+ *
+ * No current password here — the user does not know it. The reset link is the
+ * proof, and Supabase will reject this without a valid session from it.
+ */
+export async function setNewPassword(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  try {
+    const parsed = newPasswordSchema.safeParse({
+      newPassword: formData.get("newPassword"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
+
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        error: issue?.message ?? "Проверьте введённые данные",
+        fieldErrors: issue?.path.length ? { [issue.path.join(".")]: issue.message } : undefined,
+      };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new AuthenticationError(
+        "Ссылка для сброса пароля недействительна или истекла. Запросите новую."
+      );
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: parsed.data.newPassword,
+    });
+
+    if (error) {
+      throw new AppError(error.message, 400);
+    }
+  } catch (error) {
+    logger.error("Password reset failed", error);
+    return { error: toUserMessage(error) };
+  }
+
+  return { message: "Пароль обновлён. Теперь можно войти с новым паролем." };
+}

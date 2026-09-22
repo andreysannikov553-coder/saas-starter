@@ -21,6 +21,9 @@ export const env = createEnv({
     // Stripe
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
+    // Optional: a plan without a price id is simply not offered for checkout.
+    STRIPE_PRICE_ID_PRO: z.string().optional(),
+    STRIPE_PRICE_ID_BUSINESS: z.string().optional(),
 
     // Supabase
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
@@ -48,6 +51,8 @@ export const env = createEnv({
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRICE_ID_PRO: process.env.STRIPE_PRICE_ID_PRO,
+    STRIPE_PRICE_ID_BUSINESS: process.env.STRIPE_PRICE_ID_BUSINESS,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     NODE_ENV: process.env.NODE_ENV,
 

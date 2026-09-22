@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 import { getOrCreateCustomer, cancelSubscription, resumeSubscription } from "@/lib/stripe/billing";
 import { createCheckoutSession, createBillingPortalSession } from "@/lib/stripe/checkout";
 import { createCheckoutSessionSchema } from "@/lib/validation/subscription";
+import { isPurchasablePriceId } from "@/lib/stripe/pricing";
+import { AuthenticationError, NotFoundError, ValidationError } from "@/lib/utils/error";
 
 /**
  * Create checkout session for subscription
@@ -14,10 +16,16 @@ export async function createSubscriptionCheckout(priceId: string) {
   return handleServerAction(async () => {
     const user = await getCurrentUser();
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new AuthenticationError();
     }
 
     const validatedData = createCheckoutSessionSchema.parse({ priceId });
+
+    // Never hand a caller-supplied price straight to Stripe: without this the
+    // user picks what they pay, including archived or internal prices.
+    if (!isPurchasablePriceId(validatedData.priceId)) {
+      throw new ValidationError("Этот тариф недоступен для оформления");
+    }
 
     const customerId = await getOrCreateCustomer(user.id, user.email!);
 
@@ -39,7 +47,7 @@ export async function createPortalSession() {
   return handleServerAction(async () => {
     const user = await getCurrentUser();
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new AuthenticationError();
     }
 
     const subscription = await prisma.subscription.findUnique({
@@ -48,7 +56,7 @@ export async function createPortalSession() {
     });
 
     if (!subscription?.stripeCustomerId) {
-      throw new Error("No subscription found");
+      throw new NotFoundError("Подписка не найдена");
     }
 
     const session = await createBillingPortalSession(subscription.stripeCustomerId);
@@ -64,7 +72,7 @@ export async function cancelUserSubscription() {
   return handleServerAction(async () => {
     const user = await getCurrentUser();
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new AuthenticationError();
     }
 
     const subscription = await prisma.subscription.findUnique({
@@ -72,7 +80,7 @@ export async function cancelUserSubscription() {
     });
 
     if (!subscription?.stripeSubscriptionId) {
-      throw new Error("No active subscription found");
+      throw new NotFoundError("Активная подписка не найдена");
     }
 
     await cancelSubscription(subscription.stripeSubscriptionId);
@@ -93,7 +101,7 @@ export async function resumeUserSubscription() {
   return handleServerAction(async () => {
     const user = await getCurrentUser();
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new AuthenticationError();
     }
 
     const subscription = await prisma.subscription.findUnique({
@@ -101,7 +109,7 @@ export async function resumeUserSubscription() {
     });
 
     if (!subscription?.stripeSubscriptionId) {
-      throw new Error("No subscription found");
+      throw new NotFoundError("Подписка не найдена");
     }
 
     await resumeSubscription(subscription.stripeSubscriptionId);
@@ -122,7 +130,7 @@ export async function getSubscriptionDetails() {
   return handleServerAction(async () => {
     const user = await getCurrentUser();
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new AuthenticationError();
     }
 
     const subscription = await prisma.subscription.findUnique({
