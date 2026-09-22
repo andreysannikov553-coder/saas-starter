@@ -64,6 +64,17 @@ when `LLM_PROVIDER=claude`) could ever be "real" from here, and only once
 and Telegram publishing can only be verified for real outside this sandbox
 (e.g. in Vercel/CI/local dev with unrestricted egress).
 
+**Update, same day, with a real Supabase project:** the block is not limited
+to HTTPS APIs — raw TCP is blocked too. With a real Supabase `DATABASE_URL`
+supplied (both the pooled port 6543 and the direct port 5432 to
+`*.pooler.supabase.com` were tried), `npx prisma db push` failed with `P1001:
+Can't reach database server`, and a bare TCP connect attempt
+(`/dev/tcp/<host>/5432` and `/dev/tcp/<host>/6543`) timed out identically on
+both ports — before any authentication was even attempted. **This sandbox
+cannot reach an external Postgres database at all, regardless of credentials
+or which Postgres provider is used.** Combined with the HTTPS findings above,
+this session's only usable network path is HTTPS to `api.anthropic.com`.
+
 ## 4. Test run result
 
 Ran a minimal script that checks env vars, then attempts a real
@@ -100,7 +111,7 @@ _(none — this test intentionally does not use mocks; see the existing `_.test.
 
 | Stage                               | Real/Mock                                                | Input                        | Output                    | Status           | Error                                                                                                                                                                                                                         | Next action                                                                                                                                  |
 | ----------------------------------- | -------------------------------------------------------- | ---------------------------- | ------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Database connectivity               | Real (attempted)                                         | `DATABASE_URL` from env      | —                         | **Not verified** | `DATABASE_URL` not set — no `.env`/`.env.local` in this sandbox                                                                                                                                                               | Supply a real `DATABASE_URL` via `.env.local`                                                                                                |
+| Database connectivity               | Real (attempted, with a real Supabase `DATABASE_URL`)    | `DATABASE_URL` from env      | —                         | **Not verified** | `P1001: Can't reach database server` — this sandbox cannot open a raw TCP connection to an external Postgres at all (confirmed on both port 5432 and 6543, before authentication), independent of the credentials supplied    | Run this stage outside this sandbox (local dev, CI, Vercel) — no key or Postgres provider change fixes this                                  |
 | Research (Europe PMC)               | Real (attempted)                                         | Topic title                  | Source rows               | **Not verified** | Blocked by both missing `DATABASE_URL` and network egress policy (host not in allowlist)                                                                                                                                      | Needs `DATABASE_URL` **and** a network path to `www.ebi.ac.uk` — not available in this sandbox regardless of keys                            |
 | Claim extraction                    | Real (attempted)                                         | Source rows                  | Claim rows                | **Not verified** | Blocked by missing `DATABASE_URL`; would also need `ANTHROPIC_API_KEY`                                                                                                                                                        | Supply `DATABASE_URL` + `ANTHROPIC_API_KEY`                                                                                                  |
 | Script generation                   | Real (attempted)                                         | Claim rows                   | Script + beats            | **Not verified** | Same as above                                                                                                                                                                                                                 | Same as above                                                                                                                                |
@@ -112,16 +123,23 @@ _(none — this test intentionally does not use mocks; see the existing `_.test.
 
 ## 5. What's needed to get past Stage 1
 
-1. A real `DATABASE_URL` in `.env.local` (not committed), pointing at a
-   Postgres instance reachable from wherever this test next runs.
-2. A network path from that environment to `www.ebi.ac.uk`, `api.elevenlabs.io`,
-   and `api.telegram.org` if the goal is a _fully_ real run — this sandbox
-   cannot provide that regardless of keys, so the next attempt likely needs
-   to run somewhere with fewer egress restrictions (e.g. local dev, CI, or
-   Vercel preview), not here.
-3. `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-   `NEXT_PUBLIC_SUPABASE_URL` — all currently unset in this sandbox.
+**A real Supabase project and its `DATABASE_URL`/keys were supplied and
+tried in this sandbox — that ruled out "missing credentials" as the
+blocker.** What remains is purely environmental: this Claude Code cloud
+session cannot open any outbound connection except HTTPS to
+`api.anthropic.com`, so it cannot reach Postgres (any provider), Europe PMC,
+ElevenLabs, Telegram, or OpenAI, regardless of what credentials it holds.
 
-Per instruction, stopping here after this first (unsuccessful — env not
-available) dry-run attempt, pending Andrey's direction on where/how to supply
-the missing pieces.
+The only way to actually run this test for real is **outside this sandbox**:
+
+1. Locally (e.g. Andrey's own machine, `git clone` + `npm install` + the same
+   `.env.local` values), or
+2. CI / a Vercel preview deployment, where egress isn't restricted this way.
+
+`ANTHROPIC_API_KEY` is still unset even for the one stage this sandbox could
+theoretically reach (Anthropic itself) — but since the database is
+unreachable first, no stage can run here regardless.
+
+Per instruction, stopping here after this first (unsuccessful — this
+environment cannot run it) dry-run attempt, pending Andrey's direction on
+whether to continue from a different environment.
