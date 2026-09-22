@@ -17,12 +17,19 @@ interface FakeScript {
   beats: { role: string; line: string }[];
 }
 
+interface FakeExistingHook {
+  id: string;
+  scriptId: string;
+  score: { total: number } | null;
+}
+
 interface FakeState {
   script: FakeScript | null;
+  existingHooks: FakeExistingHook[];
   created: Record<string, unknown>[];
 }
 
-const state: FakeState = { script: null, created: [] };
+const state: FakeState = { script: null, existingHooks: [], created: [] };
 
 mock.module("@/lib/db", {
   namedExports: {
@@ -31,6 +38,8 @@ mock.module("@/lib/db", {
         findUnique: async () => state.script,
       },
       hook: {
+        findMany: async (args: { where: { scriptId: string } }) =>
+          state.existingHooks.filter((h) => h.scriptId === args.where.scriptId),
         create: async (args: { data: Record<string, unknown> }) => {
           const id = `hook-${state.created.length}`;
           state.created.push(args.data);
@@ -74,6 +83,7 @@ test("generateHooksForScript persists 3 hooks and reports the best score", async
     templateSlug: "mechanism-explainer",
     beats: [{ role: "HOOK", line: "Did you know..." }],
   };
+  state.existingHooks = [];
   state.created = [];
 
   const generated = {
@@ -100,6 +110,7 @@ test("generateHooksForScript reports belowThreshold for a weak hook set", async 
     templateSlug: null,
     beats: [{ role: "HOOK", line: "Hi" }],
   };
+  state.existingHooks = [];
   state.created = [];
 
   const weak = score({
@@ -123,9 +134,31 @@ test("generateHooksForScript reports belowThreshold for a weak hook set", async 
 
 test("generateHooksForScript throws when the script does not exist", async () => {
   state.script = null;
+  state.existingHooks = [];
 
   await assert.rejects(
     () => generateHooksForScript("missing-script", { provider: fakeProvider({}) }),
     /Script missing-script not found/
   );
+});
+
+test("generateHooksForScript reuses existing hooks instead of creating a duplicate set (regression)", async () => {
+  state.script = {
+    id: "script-3",
+    templateSlug: "mechanism-explainer",
+    beats: [{ role: "HOOK", line: "Did you know..." }],
+  };
+  state.existingHooks = [
+    { id: "existing-hook-1", scriptId: "script-3", score: { total: 12 } },
+    { id: "existing-hook-2", scriptId: "script-3", score: { total: 18 } },
+  ];
+  state.created = [];
+
+  const result = await generateHooksForScript("script-3", { provider: fakeProvider({}) });
+
+  assert.equal(result.scriptId, "script-3");
+  assert.deepEqual(result.hookIds, ["existing-hook-1", "existing-hook-2"]);
+  assert.equal(result.bestScore, 18);
+  assert.equal(result.belowThreshold, false);
+  assert.equal(state.created.length, 0);
 });

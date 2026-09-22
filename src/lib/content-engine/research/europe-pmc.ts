@@ -1,4 +1,5 @@
 import { SourceType } from "@prisma/client";
+import { NonRetryableError, withRetry } from "../observability/retry";
 
 /**
  * Europe PMC client.
@@ -116,14 +117,24 @@ export async function searchEuropePmc(
   url.searchParams.set("resultType", "core");
   url.searchParams.set("pageSize", String(pageSize));
 
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Europe PMC search failed: ${response.status} ${response.statusText}`);
-  }
+  const response = await withRetry(
+    async () => {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      if (!res.ok) {
+        const message = `Europe PMC search failed: ${res.status} ${res.statusText}`;
+        throw res.status < 500 ? new NonRetryableError(message) : new Error(message);
+      }
+      return res;
+    },
+    {
+      shouldRetry: (error) =>
+        !(error instanceof NonRetryableError) &&
+        !(error instanceof DOMException && error.name === "AbortError"),
+    }
+  );
 
   const body = (await response.json()) as EuropePmcResponse;
   const results = body.resultList?.result ?? [];

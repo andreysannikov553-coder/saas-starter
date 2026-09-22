@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getLLMProvider } from "../llm";
+import { withStageLog } from "../observability/logger";
 import {
   EXTRACTED_CLAIMS_JSON_SCHEMA,
   EXTRACTED_CLAIMS_SCHEMA_NAME,
@@ -45,38 +46,45 @@ export async function extractClaimsForSource(
   sourceId: string,
   options: ExtractClaimsOptions = {}
 ): Promise<ExtractClaimsResult> {
-  const source = await prisma.source.findUnique({ where: { id: sourceId } });
-  if (!source) {
-    throw new Error(`Source ${sourceId} not found`);
-  }
+  return withStageLog(
+    "claims",
+    { sourceId },
+    async () => {
+      const source = await prisma.source.findUnique({ where: { id: sourceId } });
+      if (!source) {
+        throw new Error(`Source ${sourceId} not found`);
+      }
 
-  const provider = options.provider ?? getLLMProvider();
+      const provider = options.provider ?? getLLMProvider();
 
-  const extracted = await provider.generateStructured({
-    system: SYSTEM_PROMPT,
-    prompt: [
-      `Title: ${source.title}`,
-      `Declared type: ${source.sourceType}`,
-      source.publishedAt ? `Published: ${source.publishedAt.toISOString().slice(0, 10)}` : null,
-      `URL: ${source.url}`,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-    schemaName: EXTRACTED_CLAIMS_SCHEMA_NAME,
-    schema: EXTRACTED_CLAIMS_JSON_SCHEMA,
-    parse: parseExtractedClaims,
-  });
+      const extracted = await provider.generateStructured({
+        system: SYSTEM_PROMPT,
+        prompt: [
+          `Title: ${source.title}`,
+          `Declared type: ${source.sourceType}`,
+          source.publishedAt ? `Published: ${source.publishedAt.toISOString().slice(0, 10)}` : null,
+          `URL: ${source.url}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        schemaName: EXTRACTED_CLAIMS_SCHEMA_NAME,
+        schema: EXTRACTED_CLAIMS_JSON_SCHEMA,
+        parse: parseExtractedClaims,
+      });
 
-  if (extracted.length > 0) {
-    await prisma.claim.createMany({
-      data: extracted.map((claim) => ({
-        sourceId: source.id,
-        text: claim.text,
-        evidenceLevel: claim.evidenceLevel,
-        hedgePhrase: claim.hedgePhrase,
-      })),
-    });
-  }
+      if (extracted.length > 0) {
+        await prisma.claim.createMany({
+          data: extracted.map((claim) => ({
+            sourceId: source.id,
+            text: claim.text,
+            evidenceLevel: claim.evidenceLevel,
+            hedgePhrase: claim.hedgePhrase,
+          })),
+        });
+      }
 
-  return { sourceId: source.id, extracted: extracted.length, saved: extracted.length };
+      return { sourceId: source.id, extracted: extracted.length, saved: extracted.length };
+    },
+    (result) => ({ ...result })
+  );
 }
