@@ -1,23 +1,9 @@
 /**
  * Application constants
+ *
+ * Site name/description live in `siteConfig` (lib/config.ts) — this file
+ * used to duplicate them here as unused, driftable copies.
  */
-
-export const APP_NAME = "SaaS Template";
-export const APP_DESCRIPTION = "Production-ready SaaS template";
-
-/**
- * Route paths
- */
-export const ROUTES = {
-  HOME: "/",
-  PRICING: "/pricing",
-  LOGIN: "/login",
-  SIGNUP: "/signup",
-  DASHBOARD: "/dashboard",
-  DASHBOARD_SETTINGS: "/dashboard/settings",
-  DASHBOARD_BILLING: "/dashboard/billing",
-  DASHBOARD_AI: "/dashboard/ai",
-} as const;
 
 /**
  * API endpoints

@@ -11,8 +11,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
 import { PRICING_PLANS } from "@/lib/stripe/pricing";
+import { getCurrentUser } from "@/lib/auth";
+import { SubscribeButton } from "@/components/dashboard/billing-actions";
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const user = await getCurrentUser();
+
   return (
     <div className="container flex flex-col gap-8 py-8 md:py-12 lg:py-24">
       <div className="mx-auto flex max-w-232 flex-col items-center space-y-4 text-center">
@@ -49,9 +53,25 @@ export default function PricingPage() {
               </ul>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" variant={plan.highlighted ? "default" : "outline"} asChild>
-                <Link href="/dashboard">{plan.price === 0 ? "Get Started" : "Subscribe"}</Link>
-              </Button>
+              {plan.price === 0 ? (
+                <Button className="w-full" variant="outline" asChild>
+                  <Link href={user ? "/dashboard" : "/signup"}>Get Started</Link>
+                </Button>
+              ) : user ? (
+                <SubscribeButton
+                  priceId={plan.stripePriceId}
+                  label="Subscribe"
+                  variant={plan.highlighted ? "default" : "outline"}
+                />
+              ) : (
+                <Button
+                  className="w-full"
+                  variant={plan.highlighted ? "default" : "outline"}
+                  asChild
+                >
+                  <Link href="/signup">Subscribe</Link>
+                </Button>
+              )}
             </CardFooter>
           </Card>
         ))}

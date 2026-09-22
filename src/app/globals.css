@@ -28,16 +28,12 @@
   --accent: oklch(0.967 0.003 264.542);
   --accent-foreground: oklch(0.21 0.034 264.665);
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: hsl(0 0% 98%);
+  --destructive-foreground: oklch(0.985 0.002 247.839);
   --border: oklch(0.928 0.006 264.531);
   --input: oklch(0.928 0.006 264.531);
   --ring: oklch(0.707 0.022 261.325);
   --radius: 0.625rem;
 
-  /* Fonts */
-  --font-sans: "var(--font-geist-sans)", sans-serif;
-  --font-mono: "var(--font-geist-mono)", monospace;
-  --font-display: "var(--font-geist-display)", sans-serif;
   --background: oklch(1 0 0);
   --foreground: oklch(0.13 0.028 261.692);
   --chart-1: oklch(0.646 0.222 41.116);
@@ -71,7 +67,7 @@
   --accent: oklch(0.278 0.033 256.848);
   --accent-foreground: oklch(0.985 0.002 247.839);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: hsl(0 0% 98%);
+  --destructive-foreground: oklch(0.985 0.002 247.839);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
@@ -167,7 +163,7 @@
 @layer base {
   * {
     /* Re-add the default border color from v3 */
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
@@ -181,11 +177,29 @@
   }
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
+/* Tailwind v4 removed the v3 `container` component entirely — this class had
+   no rules at all without this block, so every page using `container`
+   rendered its content flush against the viewport edge instead of centered
+   with side padding. */
+@utility container {
+  margin-inline: auto;
+  padding-inline: 1rem;
+  max-width: 100%;
+
+  @variant sm {
+    max-width: 640px;
   }
-  body {
-    @apply bg-background text-foreground;
+  @variant md {
+    max-width: 768px;
+    padding-inline: 2rem;
+  }
+  @variant lg {
+    max-width: 1024px;
+  }
+  @variant xl {
+    max-width: 1280px;
+  }
+  @variant 2xl {
+    max-width: 1400px;
   }
 }
