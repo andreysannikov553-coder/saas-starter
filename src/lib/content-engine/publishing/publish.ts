@@ -21,6 +21,13 @@ export interface PublishToTelegramResult {
  * renderer is built in this pipeline stage) — Telegram is worth posting to
  * even before video rendering exists, since a text post with the hook/CTA
  * still validates the channel and the script content end to end.
+ *
+ * Skips sending anything if this video+account is already PUBLISHED —
+ * without this, a pipeline re-run (or a caller retrying after a later stage
+ * failed) would re-send the same message to the real Telegram chat every
+ * time, even though the PR #6 upsert() already made the Publication row
+ * itself safe to touch again. A PENDING or FAILED row still resends, same
+ * as before, since those represent a publish that never actually succeeded.
  */
 export async function publishVideoToTelegram(
   videoId: string,
@@ -50,6 +57,17 @@ export async function publishVideoToTelegram(
     throw new Error(
       `PlatformAccount ${platformAccountId} has no Telegram bot token in credentials`
     );
+  }
+
+  const existing = await prisma.publication.findUnique({
+    where: { videoId_platformAccountId: { videoId: video.id, platformAccountId: account.id } },
+  });
+  if (existing && existing.status === "PUBLISHED" && existing.externalId) {
+    return {
+      publicationId: existing.id,
+      externalId: existing.externalId,
+      mode: video.assetUrl ? "video" : "text",
+    };
   }
 
   // Publication has a unique(videoId, platformAccountId) constraint (PR #1) so a
