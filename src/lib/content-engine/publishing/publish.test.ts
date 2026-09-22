@@ -39,6 +39,15 @@ mock.module("@/lib/db", {
       video: { findUnique: async () => state.video },
       platformAccount: { findUnique: async () => state.account },
       publication: {
+        findUnique: async (args: {
+          where: { videoId_platformAccountId: { videoId: string; platformAccountId: string } };
+        }) =>
+          state.publications.get(
+            keyFor(
+              args.where.videoId_platformAccountId.videoId,
+              args.where.videoId_platformAccountId.platformAccountId
+            )
+          ) ?? null,
         upsert: async (args: {
           where: { videoId_platformAccountId: { videoId: string; platformAccountId: string } };
           create: Record<string, unknown>;
@@ -221,4 +230,52 @@ test("re-running for the same video+account upserts instead of duplicating", asy
 
   assert.equal(first.publicationId, second.publicationId);
   assert.equal(state.publications.size, 1);
+});
+
+test("skips sending when the video is already PUBLISHED (regression: no real re-send on retry)", async () => {
+  resetState();
+  state.video = {
+    id: "video-7",
+    orgId: "org-1",
+    assetUrl: null,
+    script: { beats: [{ role: "HOOK", line: "Hook!" }] },
+  };
+  state.account = {
+    id: "account-1",
+    platform: "TELEGRAM",
+    handle: "@mychannel",
+    credentials: { botToken: "TOKEN123" },
+  };
+
+  const first = await publishVideoToTelegram("video-7", "account-1");
+  const second = await publishVideoToTelegram("video-7", "account-1");
+
+  assert.equal(state.sendMessageCalls.length, 1);
+  assert.equal(first.externalId, second.externalId);
+  assert.equal(second.publicationId, first.publicationId);
+});
+
+test("still resends when the previous attempt is FAILED, not PUBLISHED", async () => {
+  resetState();
+  state.video = {
+    id: "video-8",
+    orgId: "org-1",
+    assetUrl: null,
+    script: { beats: [{ role: "HOOK", line: "Hook!" }] },
+  };
+  state.account = {
+    id: "account-1",
+    platform: "TELEGRAM",
+    handle: "@mychannel",
+    credentials: { botToken: "TOKEN123" },
+  };
+  state.failSend = true;
+
+  await assert.rejects(() => publishVideoToTelegram("video-8", "account-1"));
+
+  state.failSend = false;
+  const result = await publishVideoToTelegram("video-8", "account-1");
+
+  assert.equal(state.sendMessageCalls.length, 2);
+  assert.equal(result.externalId, "text-msg-1");
 });
