@@ -95,9 +95,10 @@ mock.module("./telegram", {
 });
 
 let publishVideoToTelegram: typeof import("./publish").publishVideoToTelegram;
+let buildTelegramPublishPayload: typeof import("./publish").buildTelegramPublishPayload;
 
 before(async () => {
-  ({ publishVideoToTelegram } = await import("./publish"));
+  ({ publishVideoToTelegram, buildTelegramPublishPayload } = await import("./publish"));
 });
 
 function resetState() {
@@ -278,4 +279,70 @@ test("still resends when the previous attempt is FAILED, not PUBLISHED", async (
 
   assert.equal(state.sendMessageCalls.length, 2);
   assert.equal(result.externalId, "text-msg-1");
+});
+
+test("buildTelegramPublishPayload builds the video payload without sending or writing", async () => {
+  resetState();
+  state.video = {
+    id: "video-9",
+    orgId: "org-1",
+    assetUrl: "https://example.com/v.mp4",
+    script: {
+      beats: [
+        { role: "HOOK", line: "Hook!" },
+        { role: "CTA", line: "Subscribe" },
+      ],
+    },
+  };
+  state.account = {
+    id: "account-1",
+    platform: "TELEGRAM",
+    handle: "@mychannel",
+    credentials: { botToken: "TOKEN123" },
+  };
+
+  const payload = await buildTelegramPublishPayload("video-9", "account-1");
+
+  assert.deepEqual(payload, {
+    mode: "video",
+    chatId: "@mychannel",
+    caption: "Hook!\n\nSubscribe",
+    videoUrl: "https://example.com/v.mp4",
+  });
+  assert.equal(state.sendVideoCalls.length, 0);
+  assert.equal(state.sendMessageCalls.length, 0);
+  assert.equal(state.publications.size, 0);
+});
+
+test("buildTelegramPublishPayload builds the text payload when there's no assetUrl yet", async () => {
+  resetState();
+  state.video = {
+    id: "video-10",
+    orgId: "org-1",
+    assetUrl: null,
+    script: { beats: [{ role: "HOOK", line: "Hook only" }] },
+  };
+  state.account = {
+    id: "account-1",
+    platform: "TELEGRAM",
+    handle: "@mychannel",
+    credentials: { botToken: "TOKEN123" },
+  };
+
+  const payload = await buildTelegramPublishPayload("video-10", "account-1");
+
+  assert.deepEqual(payload, { mode: "text", chatId: "@mychannel", caption: "Hook only" });
+  assert.equal(state.sendMessageCalls.length, 0);
+  assert.equal(state.publications.size, 0);
+});
+
+test("buildTelegramPublishPayload still validates the account and bot token", async () => {
+  resetState();
+  state.video = { id: "video-11", orgId: "org-1", assetUrl: null, script: { beats: [] } };
+  state.account = { id: "account-3", platform: "TELEGRAM", handle: "@x", credentials: {} };
+
+  await assert.rejects(
+    () => buildTelegramPublishPayload("video-11", "account-3"),
+    /has no Telegram bot token/
+  );
 });

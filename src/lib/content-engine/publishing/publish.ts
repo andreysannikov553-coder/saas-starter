@@ -136,6 +136,56 @@ async function doPublish(
   }
 }
 
+export interface TelegramPublishPayload {
+  mode: "video" | "text";
+  chatId: string;
+  caption: string;
+  videoUrl?: string;
+}
+
+/**
+ * Builds the payload `publishVideoToTelegram` would send, without sending it
+ * and without touching the `Publication` row — the dry-run half of the real
+ * integration test (PHASE 1): proves the lookup, bot-token, and
+ * caption-building logic work against a real database without risking a
+ * real Telegram post. Real publishing still goes through
+ * `publishVideoToTelegram`; this never becomes a second way to actually send.
+ */
+export async function buildTelegramPublishPayload(
+  videoId: string,
+  platformAccountId: string,
+  options: Pick<PublishToTelegramOptions, "text"> = {}
+): Promise<TelegramPublishPayload> {
+  const [video, account] = await Promise.all([
+    prisma.video.findUnique({
+      where: { id: videoId },
+      include: { script: { include: { beats: { orderBy: { order: "asc" } } } } },
+    }),
+    prisma.platformAccount.findUnique({ where: { id: platformAccountId } }),
+  ]);
+
+  if (!video) {
+    throw new Error(`Video ${videoId} not found`);
+  }
+  if (!account) {
+    throw new Error(`PlatformAccount ${platformAccountId} not found`);
+  }
+  if (account.platform !== "TELEGRAM") {
+    throw new Error(`PlatformAccount ${platformAccountId} is not a Telegram account`);
+  }
+  if (!readBotToken(account.credentials)) {
+    throw new Error(
+      `PlatformAccount ${platformAccountId} has no Telegram bot token in credentials`
+    );
+  }
+
+  const caption = options.text ?? buildCaption(video.script.beats);
+
+  return video.assetUrl
+    ? { mode: "video", chatId: account.handle, caption, videoUrl: video.assetUrl }
+    : { mode: "text", chatId: account.handle, caption };
+}
+
 function readBotToken(credentials: unknown): string | null {
   if (typeof credentials !== "object" || credentials === null) return null;
   const token = (credentials as Record<string, unknown>).botToken;
