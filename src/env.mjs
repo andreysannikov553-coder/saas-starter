@@ -14,6 +14,10 @@ export const env = createEnv({
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     LLM_PROVIDER: z.enum(["claude", "openai"]).default("claude"),
 
+    // ElevenLabs (content engine narration — optional: only needed once a
+    // PlatformAccount/Character actually calls the TTS stage)
+    ELEVENLABS_API_KEY: z.string().min(1).optional(),
+
     // Stripe
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
@@ -41,6 +45,7 @@ export const env = createEnv({
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     LLM_PROVIDER: process.env.LLM_PROVIDER,
+    ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
