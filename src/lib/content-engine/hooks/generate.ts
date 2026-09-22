@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getLLMProvider } from "../llm";
+import { withStageLog } from "../observability/logger";
 import type { LLMProvider } from "../llm/types";
 import {
   GENERATED_HOOKS_JSON_SCHEMA,
@@ -57,59 +58,66 @@ export async function generateHooksForScript(
   scriptId: string,
   options: GenerateHooksOptions = {}
 ): Promise<GenerateHooksResult> {
-  const script = await prisma.script.findUnique({
-    where: { id: scriptId },
-    include: { beats: { orderBy: { order: "asc" } } },
-  });
-  if (!script) {
-    throw new Error(`Script ${scriptId} not found`);
-  }
+  return withStageLog(
+    "hooks",
+    { scriptId },
+    async () => {
+      const script = await prisma.script.findUnique({
+        where: { id: scriptId },
+        include: { beats: { orderBy: { order: "asc" } } },
+      });
+      if (!script) {
+        throw new Error(`Script ${scriptId} not found`);
+      }
 
-  const existingHooks = await prisma.hook.findMany({ where: { scriptId: script.id } });
-  if (existingHooks.length > 0) {
-    const bestScore = Math.max(
-      ...existingHooks.map((h) => (h.score as { total?: number } | null)?.total ?? 0)
-    );
-    return {
-      scriptId: script.id,
-      hookIds: existingHooks.map((h) => h.id),
-      bestScore,
-      belowThreshold: bestScore < HOOK_SCORE_THRESHOLD,
-    };
-  }
-
-  const provider = options.provider ?? getLLMProvider();
-
-  const generated = await provider.generateStructured({
-    system: SYSTEM_PROMPT,
-    prompt: buildPrompt(script.templateSlug, script.beats),
-    schemaName: GENERATED_HOOKS_SCHEMA_NAME,
-    schema: GENERATED_HOOKS_JSON_SCHEMA,
-    parse: parseGeneratedHooks,
-    maxTokens: 2048,
-  });
-
-  const created = await prisma.$transaction(
-    generated.hooks.map((hook) =>
-      prisma.hook.create({
-        data: {
+      const existingHooks = await prisma.hook.findMany({ where: { scriptId: script.id } });
+      if (existingHooks.length > 0) {
+        const bestScore = Math.max(
+          ...existingHooks.map((h) => (h.score as { total?: number } | null)?.total ?? 0)
+        );
+        return {
           scriptId: script.id,
-          text: hook.text,
-          hookType: hook.hookType,
-          score: { ...hook.score, total: hook.total },
-        },
-      })
-    )
+          hookIds: existingHooks.map((h) => h.id),
+          bestScore,
+          belowThreshold: bestScore < HOOK_SCORE_THRESHOLD,
+        };
+      }
+
+      const provider = options.provider ?? getLLMProvider();
+
+      const generated = await provider.generateStructured({
+        system: SYSTEM_PROMPT,
+        prompt: buildPrompt(script.templateSlug, script.beats),
+        schemaName: GENERATED_HOOKS_SCHEMA_NAME,
+        schema: GENERATED_HOOKS_JSON_SCHEMA,
+        parse: parseGeneratedHooks,
+        maxTokens: 2048,
+      });
+
+      const created = await prisma.$transaction(
+        generated.hooks.map((hook) =>
+          prisma.hook.create({
+            data: {
+              scriptId: script.id,
+              text: hook.text,
+              hookType: hook.hookType,
+              score: { ...hook.score, total: hook.total },
+            },
+          })
+        )
+      );
+
+      const bestScore = Math.max(...generated.hooks.map((h) => h.total));
+
+      return {
+        scriptId: script.id,
+        hookIds: created.map((h) => h.id),
+        bestScore,
+        belowThreshold: bestScore < HOOK_SCORE_THRESHOLD,
+      };
+    },
+    (result) => ({ ...result })
   );
-
-  const bestScore = Math.max(...generated.hooks.map((h) => h.total));
-
-  return {
-    scriptId: script.id,
-    hookIds: created.map((h) => h.id),
-    bestScore,
-    belowThreshold: bestScore < HOOK_SCORE_THRESHOLD,
-  };
 }
 
 function buildPrompt(templateSlug: string | null, beats: { role: string; line: string }[]): string {

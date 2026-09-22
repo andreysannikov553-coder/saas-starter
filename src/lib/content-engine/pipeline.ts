@@ -5,6 +5,7 @@ import { generateScriptForTopic } from "./scripts/generate";
 import { generateHooksForScript } from "./hooks/generate";
 import { renderNarrationForScript } from "./render/narrate-video";
 import { publishVideoToTelegram } from "./publishing/publish";
+import { withStageLog } from "./observability/logger";
 
 export interface RunContentPipelineOptions {
   research?: ResearchTopicOptions;
@@ -56,6 +57,18 @@ export interface RunContentPipelineResult {
 export async function runContentPipeline(
   topicId: string,
   options: RunContentPipelineOptions = {}
+): Promise<RunContentPipelineResult> {
+  return withStageLog(
+    "pipeline",
+    { topicId },
+    () => doRunContentPipeline(topicId, options),
+    (result) => ({ stoppedAt: result.stoppedAt, publicationId: result.publicationId })
+  );
+}
+
+async function doRunContentPipeline(
+  topicId: string,
+  options: RunContentPipelineOptions
 ): Promise<RunContentPipelineResult> {
   const result: RunContentPipelineResult = {
     topicId,

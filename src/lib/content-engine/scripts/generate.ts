@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getLLMProvider } from "../llm";
+import { withStageLog } from "../observability/logger";
 import type { LLMProvider } from "../llm/types";
 import {
   GENERATED_SCRIPT_SCHEMA_NAME,
@@ -59,78 +60,85 @@ export async function generateScriptForTopic(
   topicId: string,
   options: GenerateScriptOptions = {}
 ): Promise<GenerateScriptResult> {
-  const topic = await prisma.topic.findUnique({ where: { id: topicId } });
-  if (!topic) {
-    throw new Error(`Topic ${topicId} not found`);
-  }
+  return withStageLog(
+    "script",
+    { topicId },
+    async () => {
+      const topic = await prisma.topic.findUnique({ where: { id: topicId } });
+      if (!topic) {
+        throw new Error(`Topic ${topicId} not found`);
+      }
 
-  const existingScript = await prisma.script.findFirst({
-    where: { topicId: topic.id },
-    include: { beats: true },
-    orderBy: { createdAt: "desc" },
-  });
-  if (existingScript) {
-    return {
-      scriptId: existingScript.id,
-      templateSlug: existingScript.templateSlug ?? "unknown",
-      beatCount: existingScript.beats.length,
-      citedClaims: existingScript.beats.filter((b) => b.claimId !== null).length,
-    };
-  }
+      const existingScript = await prisma.script.findFirst({
+        where: { topicId: topic.id },
+        include: { beats: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (existingScript) {
+        return {
+          scriptId: existingScript.id,
+          templateSlug: existingScript.templateSlug ?? "unknown",
+          beatCount: existingScript.beats.length,
+          citedClaims: existingScript.beats.filter((b) => b.claimId !== null).length,
+        };
+      }
 
-  const claims = await prisma.claim.findMany({
-    where: { source: { topicId: topic.id } },
-    select: { id: true, text: true, evidenceLevel: true, hedgePhrase: true },
-    take: 30,
-  });
+      const claims = await prisma.claim.findMany({
+        where: { source: { topicId: topic.id } },
+        select: { id: true, text: true, evidenceLevel: true, hedgePhrase: true },
+        take: 30,
+      });
 
-  if (claims.length === 0) {
-    throw new Error(
-      `Topic ${topicId} has no claims to script from yet — run researchTopic + extractClaimsForSource first`
-    );
-  }
+      if (claims.length === 0) {
+        throw new Error(
+          `Topic ${topicId} has no claims to script from yet — run researchTopic + extractClaimsForSource first`
+        );
+      }
 
-  const provider = options.provider ?? getLLMProvider();
-  const knownClaimIds = new Set(claims.map((c) => c.id));
+      const provider = options.provider ?? getLLMProvider();
+      const knownClaimIds = new Set(claims.map((c) => c.id));
 
-  const generated = await provider.generateStructured({
-    system: SYSTEM_PROMPT,
-    prompt: buildPrompt(topic.title, claims),
-    schemaName: GENERATED_SCRIPT_SCHEMA_NAME,
-    schema: buildGeneratedScriptJsonSchema(claims.map((c) => c.id)),
-    parse: (raw) => parseGeneratedScript(raw, knownClaimIds),
-    maxTokens: 4096,
-  });
+      const generated = await provider.generateStructured({
+        system: SYSTEM_PROMPT,
+        prompt: buildPrompt(topic.title, claims),
+        schemaName: GENERATED_SCRIPT_SCHEMA_NAME,
+        schema: buildGeneratedScriptJsonSchema(claims.map((c) => c.id)),
+        parse: (raw) => parseGeneratedScript(raw, knownClaimIds),
+        maxTokens: 4096,
+      });
 
-  const script = await prisma.script.create({
-    data: {
-      orgId: topic.orgId,
-      topicId: topic.id,
-      characterId: options.characterId,
-      templateSlug: generated.templateSlug,
-      targetSeconds: generated.targetSeconds,
-      status: "FACT_GATE_PASSED", // every cited claim was validated against knownClaimIds above
-      beats: {
-        create: generated.beats.map((beat, index) => ({
-          order: index,
-          role: beat.role,
-          line: beat.line,
-          visualIntent: beat.visualIntent,
-          claimId: beat.claimId,
-        })),
-      },
+      const script = await prisma.script.create({
+        data: {
+          orgId: topic.orgId,
+          topicId: topic.id,
+          characterId: options.characterId,
+          templateSlug: generated.templateSlug,
+          targetSeconds: generated.targetSeconds,
+          status: "FACT_GATE_PASSED", // every cited claim was validated against knownClaimIds above
+          beats: {
+            create: generated.beats.map((beat, index) => ({
+              order: index,
+              role: beat.role,
+              line: beat.line,
+              visualIntent: beat.visualIntent,
+              claimId: beat.claimId,
+            })),
+          },
+        },
+        include: { beats: true },
+      });
+
+      await prisma.topic.update({ where: { id: topic.id }, data: { status: "SCRIPTED" } });
+
+      return {
+        scriptId: script.id,
+        templateSlug: script.templateSlug ?? generated.templateSlug,
+        beatCount: script.beats.length,
+        citedClaims: script.beats.filter((b) => b.claimId !== null).length,
+      };
     },
-    include: { beats: true },
-  });
-
-  await prisma.topic.update({ where: { id: topic.id }, data: { status: "SCRIPTED" } });
-
-  return {
-    scriptId: script.id,
-    templateSlug: script.templateSlug ?? generated.templateSlug,
-    beatCount: script.beats.length,
-    citedClaims: script.beats.filter((b) => b.claimId !== null).length,
-  };
+    (result) => ({ ...result })
+  );
 }
 
 function buildPrompt(

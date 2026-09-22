@@ -53,3 +53,40 @@ test("synthesizeSpeech throws with the response body on a non-ok response", asyn
 
   globalThis.fetch = originalFetch;
 });
+
+test("synthesizeSpeech does not retry a 4xx — it's not going to succeed on retry", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = mock.fn(async () => {
+    calls += 1;
+    return { ok: false, status: 401, text: async () => "invalid_api_key" } as Response;
+  }) as unknown as typeof fetch;
+
+  const provider = new ElevenLabsTTSProvider("bad-key");
+  await assert.rejects(() => provider.synthesizeSpeech({ text: "Hi", voiceId: "voice-abc" }));
+
+  assert.equal(calls, 1);
+  globalThis.fetch = originalFetch;
+});
+
+test("synthesizeSpeech retries a transient 5xx and succeeds (regression: no retry was wired before)", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = mock.fn(async () => {
+    calls += 1;
+    if (calls < 2) {
+      return { ok: false, status: 503, text: async () => "temporarily unavailable" } as Response;
+    }
+    return {
+      ok: true,
+      arrayBuffer: async () => new TextEncoder().encode("fake-mp3-bytes").buffer,
+    } as Response;
+  }) as unknown as typeof fetch;
+
+  const provider = new ElevenLabsTTSProvider("api-key-123");
+  const result = await provider.synthesizeSpeech({ text: "Hi", voiceId: "voice-abc" });
+
+  assert.equal(calls, 2);
+  assert.equal(result.audio.toString(), "fake-mp3-bytes");
+  globalThis.fetch = originalFetch;
+});

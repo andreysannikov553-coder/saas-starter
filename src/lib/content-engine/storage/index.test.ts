@@ -11,11 +11,18 @@ import assert from "node:assert/strict";
 
 interface FakeState {
   uploadError: { message: string } | null;
+  /** When > 0, the mock fails with `uploadError` this many times before succeeding. */
+  failNextAttempts: number;
   uploadCalls: { path: string; contentType: string; upsert: boolean }[];
   publicUrl: string;
 }
 
-const state: FakeState = { uploadError: null, uploadCalls: [], publicUrl: "" };
+const state: FakeState = {
+  uploadError: null,
+  failNextAttempts: 0,
+  uploadCalls: [],
+  publicUrl: "",
+};
 
 mock.module("@supabase/supabase-js", {
   namedExports: {
@@ -32,6 +39,10 @@ mock.module("@supabase/supabase-js", {
               contentType: options.contentType,
               upsert: options.upsert,
             });
+            if (state.failNextAttempts > 0) {
+              state.failNextAttempts -= 1;
+              return { error: { message: "transient" } };
+            }
             return { error: state.uploadError };
           },
           getPublicUrl: (path: string) => ({
@@ -82,4 +93,20 @@ test("uploadRenderAsset throws with Supabase's error message on failure", async 
       }),
     /Failed to upload render asset to org-1\/video-1\/narration.mp3: bucket not found/
   );
+});
+
+test("uploadRenderAsset retries a transient failure and succeeds (regression: no retry was wired before)", async () => {
+  state.uploadError = null;
+  state.uploadCalls = [];
+  state.publicUrl = "https://fake.supabase.co/storage/v1/object/public/content-engine-renders";
+  state.failNextAttempts = 1;
+
+  const url = await uploadRenderAsset({
+    path: "org-1/video-2/narration.mp3",
+    data: Buffer.from("fake-audio"),
+    contentType: "audio/mpeg",
+  });
+
+  assert.equal(state.uploadCalls.length, 2);
+  assert.match(url, /org-1\/video-2\/narration\.mp3$/);
 });

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { sendTelegramMessage, sendTelegramVideo } from "./telegram";
+import { withStageLog } from "../observability/logger";
 
 export interface PublishToTelegramOptions {
   /** Caption/text override — defaults to the script's HOOK beat line + CTA line. */
@@ -33,6 +34,19 @@ export async function publishVideoToTelegram(
   videoId: string,
   platformAccountId: string,
   options: PublishToTelegramOptions = {}
+): Promise<PublishToTelegramResult> {
+  return withStageLog(
+    "publish",
+    { videoId, platformAccountId },
+    () => doPublish(videoId, platformAccountId, options),
+    (result) => ({ ...result })
+  );
+}
+
+async function doPublish(
+  videoId: string,
+  platformAccountId: string,
+  options: PublishToTelegramOptions
 ): Promise<PublishToTelegramResult> {
   const [video, account] = await Promise.all([
     prisma.video.findUnique({
