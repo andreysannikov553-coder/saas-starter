@@ -84,7 +84,13 @@ export async function runContentPipeline(
       }
     }
 
-    const sources = await prisma.source.findMany({ where: { topicId }, select: { id: true } });
+    // Only sources with no claims yet — extractClaimsForSource has no dedup guard of
+    // its own, so re-running the pipeline for a topic with existing sources would
+    // otherwise re-extract (and duplicate) claims for every source on every run.
+    const sources = await prisma.source.findMany({
+      where: { topicId, claims: { none: {} } },
+      select: { id: true },
+    });
     for (const source of sources) {
       const extracted = await extractClaimsForSource(source.id);
       result.claimsExtracted += extracted.extracted;
