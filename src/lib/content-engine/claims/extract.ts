@@ -10,8 +10,8 @@ import {
 
 const SYSTEM_PROMPT = `You extract factual claims from scientific source metadata for a health/science
 content pipeline. Rules, non-negotiable:
-- Only extract claims that are directly supported by the given title and metadata. Never invent
-  a finding the source does not state.
+- Only extract claims that are directly supported by the given title, abstract (when present), and
+  metadata. Never invent a finding the source does not state.
 - Every claim gets an evidenceLevel from A (meta-analysis / systematic review / official body
   consensus) to D (expert opinion, no direct data) — see the schema for the full definitions.
 - Every C or D claim MUST carry a hedgePhrase a script can use verbatim ("preliminary evidence
@@ -34,13 +34,12 @@ export interface ExtractClaimsResult {
 /**
  * Extracts claims from one source and persists them.
  *
- * Runs against the source's title and type only — Europe PMC's search API
- * (research.ts) does not return abstracts, so this is deliberately
- * conservative: a title alone rarely supports more than zero or one claim,
- * and the prompt is written to return an empty array rather than guess.
- * Fetching full abstracts is a follow-up (Europe PMC's separate article
- * lookup endpoint), not done here to keep this stage's scope to "wire the
- * provider interface end to end."
+ * Runs against the source's title, type, and abstract when Europe PMC's
+ * `core` result type returned one (europe-pmc.ts). Many records — especially
+ * older ones or those outside PMC's open-access subset — have no abstract
+ * text, so this stays conservative for those: title alone rarely supports
+ * more than zero or one claim, and the prompt is written to return an empty
+ * array rather than guess.
  */
 export async function extractClaimsForSource(
   sourceId: string,
@@ -63,6 +62,7 @@ export async function extractClaimsForSource(
           `Title: ${source.title}`,
           `Declared type: ${source.sourceType}`,
           source.publishedAt ? `Published: ${source.publishedAt.toISOString().slice(0, 10)}` : null,
+          source.abstract ? `Abstract: ${source.abstract}` : null,
           `URL: ${source.url}`,
         ]
           .filter(Boolean)

@@ -24,6 +24,7 @@ interface EuropePmcResult {
   firstPublicationDate?: string;
   pubYear?: string;
   pubTypeList?: { pubType?: string[] };
+  abstractText?: string;
 }
 
 interface EuropePmcResponse {
@@ -34,6 +35,8 @@ interface EuropePmcResponse {
 export interface ResearchedSource {
   title: string;
   url: string;
+  /** The article's abstract, when Europe PMC's `core` result type returns one. */
+  abstract: string | null;
   sourceType: SourceType;
   publishedAt: Date | null;
 }
@@ -88,6 +91,7 @@ export function toResearchedSource(result: EuropePmcResult): ResearchedSource | 
   return {
     title: result.title,
     url,
+    abstract: result.abstractText ?? null,
     sourceType: classifySourceType(result.pubTypeList?.pubType ?? []),
     publishedAt: parsePublishedAt(result),
   };

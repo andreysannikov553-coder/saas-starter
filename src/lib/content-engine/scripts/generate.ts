@@ -14,6 +14,9 @@ structure of beats — never as a flat paragraph, because one structure must ada
 TikTok, and a Telegram post alike.
 
 Rules, non-negotiable:
+- Write every beat's "line" in Russian. The channel launches in Russian even though the source
+  claims you are given are in English — translate/paraphrase the claim's substance into natural,
+  spoken Russian, never leave it in English or mix languages within a line.
 - Pick exactly one of the six templates you are given and follow its shape.
 - Beat roles, in the order the video plays: HOOK (the first 1-2 seconds — stop the scroll, no
   slow windup), CURIOSITY (opens a question the viewer wants answered), VALUE (the substance —

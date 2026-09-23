@@ -39,18 +39,7 @@ export async function renderNarrationForScript(
 
       const narration = await narrateScript(scriptId, options);
 
-      const video = await prisma.video.findFirst({
-        where: { scriptId: script.id, status: "QUEUED" },
-        orderBy: { createdAt: "desc" },
-      });
-
-      const videoId =
-        video?.id ??
-        (
-          await prisma.video.create({
-            data: { orgId: script.orgId, scriptId: script.id },
-          })
-        ).id;
+      const videoId = await getOrCreateVideoForScript(script.id);
 
       const audioUrl = await uploadRenderAsset({
         path: `${script.orgId}/${videoId}/narration.mp3`,
@@ -64,4 +53,24 @@ export async function renderNarrationForScript(
     },
     (result) => ({ ...result })
   );
+}
+
+/**
+ * Reuses an existing QUEUED Video for this script if one exists (so re-runs
+ * don't pile up duplicate rows); otherwise creates one. Shared by narration
+ * (which then fills `audioUrl`) and by a text-only publish, which needs a
+ * Video row to hang a Publication off of without ever calling narration.
+ */
+export async function getOrCreateVideoForScript(scriptId: string): Promise<string> {
+  const video = await prisma.video.findFirst({
+    where: { scriptId, status: "QUEUED" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (video) return video.id;
+
+  const script = await prisma.script.findUnique({ where: { id: scriptId } });
+  if (!script) {
+    throw new Error(`Script ${scriptId} not found`);
+  }
+  return (await prisma.video.create({ data: { orgId: script.orgId, scriptId } })).id;
 }
