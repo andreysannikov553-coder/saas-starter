@@ -23,11 +23,18 @@ export function getLLMProvider(provider?: "claude" | "openai"): LLMProvider {
     if (!env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is not set but the openai provider was requested");
     }
-    return new OpenAIProvider({ apiKey: env.OPENAI_API_KEY });
+    return new OpenAIProvider({
+      apiKey: env.OPENAI_API_KEY,
+      baseURL: env.OPENAI_BASE_URL,
+      model: env.OPENAI_MODEL,
+    });
   }
 
   if (!env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not set but the claude provider was requested");
   }
-  return new ClaudeProvider({ apiKey: env.ANTHROPIC_API_KEY });
+  return new ClaudeProvider({
+    apiKey: env.ANTHROPIC_API_KEY,
+    workspaceId: env.ANTHROPIC_WORKSPACE_ID,
+  });
 }

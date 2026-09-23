@@ -8,10 +8,17 @@ export const env = createEnv({
 
     // OpenAI
     OPENAI_API_KEY: z.string().min(1),
+    // Optional: point the OpenAI-shaped client at another OpenAI-compatible
+    // endpoint (e.g. Groq's free API) instead of api.openai.com.
+    OPENAI_BASE_URL: z.string().url().optional(),
+    OPENAI_MODEL: z.string().min(1).optional(),
 
     // Anthropic (content engine — optional: required only when
     // LLM_PROVIDER is "claude", the default)
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    // Required only for an org-level (non-workspace-scoped) Anthropic API key
+    // that Anthropic rejects without an anthropic-workspace-id header.
+    ANTHROPIC_WORKSPACE_ID: z.string().min(1).optional(),
     LLM_PROVIDER: z.enum(["claude", "openai"]).default("claude"),
 
     // ElevenLabs (content engine narration — optional: only needed once a
@@ -43,7 +50,10 @@ export const env = createEnv({
     // Server
     DATABASE_URL: process.env.DATABASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
+    OPENAI_MODEL: process.env.OPENAI_MODEL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    ANTHROPIC_WORKSPACE_ID: process.env.ANTHROPIC_WORKSPACE_ID,
     LLM_PROVIDER: process.env.LLM_PROVIDER,
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
