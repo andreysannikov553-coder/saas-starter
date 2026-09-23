@@ -26,6 +26,7 @@ interface FakeState {
   hooksResult: { hookIds: string[]; bestScore: number; belowThreshold: boolean };
   narrateResult: { videoId: string; audioUrl: string };
   publishResult: { publicationId: string; externalId: string; mode: "video" | "text" };
+  textOnlyVideoId: string;
 }
 
 const state: FakeState = {
@@ -38,6 +39,7 @@ const state: FakeState = {
   hooksResult: { hookIds: ["hook-1", "hook-2", "hook-3"], bestScore: 20, belowThreshold: false },
   narrateResult: { videoId: "video-1", audioUrl: "https://example.com/a.mp3" },
   publishResult: { publicationId: "pub-1", externalId: "msg-1", mode: "text" },
+  textOnlyVideoId: "video-text-only",
 };
 
 mock.module("@/lib/db", {
@@ -95,6 +97,7 @@ mock.module("./hooks/generate", {
 mock.module("./render/narrate-video", {
   namedExports: {
     renderNarrationForScript: async () => state.narrateResult,
+    getOrCreateVideoForScript: async () => state.textOnlyVideoId,
   },
 });
 
@@ -124,6 +127,7 @@ function reset() {
   };
   state.narrateResult = { videoId: "video-1", audioUrl: "https://example.com/a.mp3" };
   state.publishResult = { publicationId: "pub-1", externalId: "msg-1", mode: "text" };
+  state.textOnlyVideoId = "video-text-only";
 }
 
 test("stops at 'research' when nothing is found and no sources exist yet", async () => {
@@ -202,6 +206,21 @@ test("runs narration and publishing through to completion when publish is given"
 
   assert.equal(result.stoppedAt, null);
   assert.equal(result.videoId, "video-1");
+  assert.equal(result.publicationId, "pub-1");
+});
+
+test("publishes as text without narration when ttsVoiceId is omitted", async () => {
+  reset();
+  state.sources = [{ id: "source-1", topicId: "topic-6b", hasClaims: false }];
+  state.researchResult = { found: 1, created: 1, skipped: 0 };
+  state.claimCount = 1;
+
+  const result = await runContentPipeline("topic-6b", {
+    publish: { telegramPlatformAccountId: "account-1" },
+  });
+
+  assert.equal(result.stoppedAt, null);
+  assert.equal(result.videoId, "video-text-only");
   assert.equal(result.publicationId, "pub-1");
 });
 
