@@ -3,7 +3,7 @@ import { sendTelegramMessage, sendTelegramVideo } from "./telegram";
 import { withStageLog } from "../observability/logger";
 
 export interface PublishToTelegramOptions {
-  /** Caption/text override — defaults to the script's HOOK beat line + CTA line. */
+  /** Caption/text override — defaults to the full script, one beat's line per paragraph. */
   text?: string;
   signal?: AbortSignal;
 }
@@ -20,8 +20,8 @@ export interface PublishToTelegramResult {
  *
  * Falls back to a text-only post when the Video has no `assetUrl` yet (no
  * renderer is built in this pipeline stage) — Telegram is worth posting to
- * even before video rendering exists, since a text post with the hook/CTA
- * still validates the channel and the script content end to end.
+ * even before video rendering exists, since a text post with the full
+ * script still validates the channel and the script content end to end.
  *
  * Skips sending anything if this video+account is already PUBLISHED —
  * without this, a pipeline re-run (or a caller retrying after a later stage
@@ -142,8 +142,7 @@ function readBotToken(credentials: unknown): string | null {
   return typeof token === "string" && token.length > 0 ? token : null;
 }
 
+/** Joins every beat's line in order — the full script, not just the hook/CTA. */
 function buildCaption(beats: { role: string; line: string }[]): string {
-  const hook = beats.find((b) => b.role === "HOOK")?.line;
-  const cta = beats.find((b) => b.role === "CTA")?.line;
-  return [hook, cta].filter(Boolean).join("\n\n");
+  return beats.map((b) => b.line).join("\n\n");
 }
