@@ -22,6 +22,16 @@ export interface SendMessageOptions {
   signal?: AbortSignal;
 }
 
+export interface SendPhotoOptions {
+  botToken: string;
+  chatId: string;
+  photo: Buffer;
+  /** Telegram truncates photo captions at 1024 chars — pass a short one. */
+  caption?: string;
+  filename?: string;
+  signal?: AbortSignal;
+}
+
 export interface TelegramSendResult {
   messageId: string;
 }
@@ -62,6 +72,37 @@ export async function sendTelegramMessage(
     },
     options.signal
   );
+}
+
+/**
+ * Sends a locally-rendered image (the quote card) as a photo — used instead
+ * of sendMessage when no video asset exists yet, so posts have something to
+ * look at (see render/quote-card.tsx). Uploaded directly as multipart, since
+ * there's no public URL for an ephemeral in-memory PNG.
+ */
+export async function sendTelegramPhoto(options: SendPhotoOptions): Promise<TelegramSendResult> {
+  const form = new FormData();
+  form.append("chat_id", options.chatId);
+  if (options.caption) form.append("caption", options.caption);
+  form.append(
+    "photo",
+    new Blob([new Uint8Array(options.photo)], { type: "image/png" }),
+    options.filename ?? "card.png"
+  );
+
+  const response = await fetch(`${TELEGRAM_API_BASE}/bot${options.botToken}/sendPhoto`, {
+    method: "POST",
+    body: form,
+    signal: options.signal,
+  });
+
+  const data = (await response.json()) as TelegramApiResponse;
+
+  if (!response.ok || !data.ok || !data.result) {
+    throw new Error(`Telegram sendPhoto failed: ${data.description ?? response.statusText}`);
+  }
+
+  return { messageId: String(data.result.message_id) };
 }
 
 async function callTelegram(

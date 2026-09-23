@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { sendTelegramMessage, sendTelegramVideo } from "./telegram";
+import { sendTelegramMessage, sendTelegramPhoto, sendTelegramVideo } from "./telegram";
+import { renderQuoteCard } from "../render/quote-card";
 import { withStageLog } from "../observability/logger";
 
 export interface PublishToTelegramOptions {
@@ -11,7 +12,7 @@ export interface PublishToTelegramOptions {
 export interface PublishToTelegramResult {
   publicationId: string;
   externalId: string;
-  mode: "video" | "text";
+  mode: "video" | "photo" | "text";
 }
 
 /**
@@ -51,7 +52,9 @@ async function doPublish(
   const [video, account] = await Promise.all([
     prisma.video.findUnique({
       where: { id: videoId },
-      include: { script: { include: { beats: { orderBy: { order: "asc" } } } } },
+      include: {
+        script: { include: { beats: { orderBy: { order: "asc" } }, hooks: true } },
+      },
     }),
     prisma.platformAccount.findUnique({ where: { id: platformAccountId } }),
   ]);
@@ -80,7 +83,7 @@ async function doPublish(
     return {
       publicationId: existing.id,
       externalId: existing.externalId,
-      mode: video.assetUrl ? "video" : "text",
+      mode: video.assetUrl ? "video" : "photo",
     };
   }
 
@@ -102,20 +105,55 @@ async function doPublish(
   const caption = options.text ?? buildCaption(video.script.beats);
 
   try {
-    const result = video.assetUrl
-      ? await sendTelegramVideo({
+    let result: { messageId: string };
+    let mode: PublishToTelegramResult["mode"];
+
+    if (video.assetUrl) {
+      mode = "video";
+      result = await sendTelegramVideo({
+        botToken,
+        chatId: account.handle,
+        videoUrl: video.assetUrl,
+        caption,
+        signal: options.signal,
+      });
+    } else {
+      // No render yet — post a branded quote card (best hook as headline) so
+      // the channel isn't just walls of text, then the full script as a
+      // follow-up message. Card rendering is best-effort: if it fails for
+      // any reason, fall back to the plain text post rather than losing the
+      // publish entirely.
+      const topHook = pickTopHook(video.script.hooks);
+      try {
+        const card = await renderQuoteCard({ headline: topHook?.text ?? caption.slice(0, 120) });
+        result = await sendTelegramPhoto({
           botToken,
           chatId: account.handle,
-          videoUrl: video.assetUrl,
-          caption,
+          photo: card,
+          caption: (topHook?.text ?? caption).slice(0, 1024),
           signal: options.signal,
-        })
-      : await sendTelegramMessage({
+        });
+        mode = "photo";
+        await sendTelegramMessage({
+          botToken,
+          chatId: account.handle,
+          text: caption,
+          signal: options.signal,
+        }).catch(() => {
+          // Best-effort follow-up — the photo post already succeeded and is
+          // what we record as the publication, so a failed follow-up text
+          // isn't a publish failure.
+        });
+      } catch {
+        mode = "text";
+        result = await sendTelegramMessage({
           botToken,
           chatId: account.handle,
           text: caption,
           signal: options.signal,
         });
+      }
+    }
 
     await prisma.publication.update({
       where: { id: publication.id },
@@ -125,7 +163,7 @@ async function doPublish(
     return {
       publicationId: publication.id,
       externalId: result.messageId,
-      mode: video.assetUrl ? "video" : "text",
+      mode,
     };
   } catch (error) {
     await prisma.publication.update({
@@ -134,6 +172,18 @@ async function doPublish(
     });
     throw error;
   }
+}
+
+/** Highest-scoring hook (by total), if any were generated for this script. */
+function pickTopHook(
+  hooks: { text: string; score: unknown }[] | null | undefined
+): { text: string } | null {
+  if (!hooks || hooks.length === 0) return null;
+  return hooks.reduce((best, h) => {
+    const total = (h.score as { total?: number } | null)?.total ?? 0;
+    const bestTotal = (best.score as { total?: number } | null)?.total ?? 0;
+    return total > bestTotal ? h : best;
+  });
 }
 
 function readBotToken(credentials: unknown): string | null {

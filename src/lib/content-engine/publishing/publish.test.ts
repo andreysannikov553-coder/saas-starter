@@ -17,6 +17,7 @@ interface FakeState {
   publications: Map<string, Record<string, unknown>>;
   sendVideoCalls: unknown[];
   sendMessageCalls: unknown[];
+  sendPhotoCalls: unknown[];
   failSend: boolean;
 }
 
@@ -26,6 +27,7 @@ const state: FakeState = {
   publications: new Map(),
   sendVideoCalls: [],
   sendMessageCalls: [],
+  sendPhotoCalls: [],
   failSend: false,
 };
 
@@ -91,6 +93,17 @@ mock.module("./telegram", {
       if (state.failSend) throw new Error("Telegram sendMessage failed: simulated");
       return { messageId: "text-msg-1" };
     },
+    sendTelegramPhoto: async (options: unknown) => {
+      state.sendPhotoCalls.push(options);
+      if (state.failSend) throw new Error("Telegram sendPhoto failed: simulated");
+      return { messageId: "photo-msg-1" };
+    },
+  },
+});
+
+mock.module("../render/quote-card", {
+  namedExports: {
+    renderQuoteCard: async () => Buffer.from("fake-png"),
   },
 });
 
@@ -106,6 +119,7 @@ function resetState() {
   state.publications = new Map();
   state.sendVideoCalls = [];
   state.sendMessageCalls = [];
+  state.sendPhotoCalls = [];
   state.failSend = false;
 }
 
@@ -139,7 +153,7 @@ test("publishes as video when the Video has an assetUrl", async () => {
   assert.equal(pub?.status, "PUBLISHED");
 });
 
-test("falls back to text when the Video has no assetUrl", async () => {
+test("posts a quote card photo (with a follow-up text) when the Video has no assetUrl", async () => {
   resetState();
   state.video = {
     id: "video-2",
@@ -150,6 +164,7 @@ test("falls back to text when the Video has no assetUrl", async () => {
         { role: "HOOK", line: "Hook!" },
         { role: "CTA", line: "Subscribe" },
       ],
+      hooks: [],
     },
   };
   state.account = {
@@ -161,7 +176,8 @@ test("falls back to text when the Video has no assetUrl", async () => {
 
   const result = await publishVideoToTelegram("video-2", "account-1");
 
-  assert.equal(result.mode, "text");
+  assert.equal(result.mode, "photo");
+  assert.equal(state.sendPhotoCalls.length, 1);
   assert.equal(state.sendMessageCalls.length, 1);
   assert.equal(state.sendVideoCalls.length, 0);
 });
@@ -305,5 +321,5 @@ test("still resends when the previous attempt is FAILED, not PUBLISHED", async (
   const result = await publishVideoToTelegram("video-8", "account-1");
 
   assert.equal(state.sendMessageCalls.length, 2);
-  assert.equal(result.externalId, "text-msg-1");
+  assert.equal(result.externalId, "photo-msg-1");
 });

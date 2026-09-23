@@ -25,6 +25,13 @@ export const env = createEnv({
     // PlatformAccount/Character actually calls the TTS stage)
     ELEVENLABS_API_KEY: z.string().min(1).optional(),
 
+    // Content engine autoposting (/api/cron/publish, triggered by Vercel Cron)
+    // CRON_SECRET must match the request's Authorization: Bearer header —
+    // Vercel sends this automatically for cron-invoked requests once this
+    // env var is set on the project.
+    CRON_SECRET: z.string().min(1).optional(),
+    TELEGRAM_PLATFORM_ACCOUNT_ID: z.string().min(1).optional(),
+
     // Stripe
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
@@ -56,6 +63,8 @@ export const env = createEnv({
     ANTHROPIC_WORKSPACE_ID: process.env.ANTHROPIC_WORKSPACE_ID,
     LLM_PROVIDER: process.env.LLM_PROVIDER,
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+    CRON_SECRET: process.env.CRON_SECRET,
+    TELEGRAM_PLATFORM_ACCOUNT_ID: process.env.TELEGRAM_PLATFORM_ACCOUNT_ID,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
