@@ -166,6 +166,34 @@ test("falls back to text when the Video has no assetUrl", async () => {
   assert.equal(state.sendVideoCalls.length, 0);
 });
 
+test("caption includes every beat's line, not just HOOK and CTA (regression)", async () => {
+  resetState();
+  state.video = {
+    id: "video-2b",
+    orgId: "org-1",
+    assetUrl: null,
+    script: {
+      beats: [
+        { role: "HOOK", line: "Hook!" },
+        { role: "VALUE", line: "The actual finding goes here." },
+        { role: "PAYOFF", line: "And the payoff." },
+        { role: "CTA", line: "Subscribe" },
+      ],
+    },
+  };
+  state.account = {
+    id: "account-1",
+    platform: "TELEGRAM",
+    handle: "@mychannel",
+    credentials: { botToken: "TOKEN123" },
+  };
+
+  await publishVideoToTelegram("video-2b", "account-1");
+
+  const call = state.sendMessageCalls[0] as { text: string };
+  assert.equal(call.text, "Hook!\n\nThe actual finding goes here.\n\nAnd the payoff.\n\nSubscribe");
+});
+
 test("rejects a non-Telegram platform account", async () => {
   resetState();
   state.video = { id: "video-3", orgId: "org-1", assetUrl: null, script: { beats: [] } };
