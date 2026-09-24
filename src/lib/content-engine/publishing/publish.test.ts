@@ -18,6 +18,7 @@ interface FakeState {
   sendVideoCalls: unknown[];
   sendMessageCalls: unknown[];
   sendPhotoCalls: unknown[];
+  sendMediaGroupCalls: { photos: Buffer[]; caption?: string }[];
   failSend: boolean;
 }
 
@@ -28,6 +29,7 @@ const state: FakeState = {
   sendVideoCalls: [],
   sendMessageCalls: [],
   sendPhotoCalls: [],
+  sendMediaGroupCalls: [],
   failSend: false,
 };
 
@@ -98,12 +100,20 @@ mock.module("./telegram", {
       if (state.failSend) throw new Error("Telegram sendPhoto failed: simulated");
       return { messageId: "photo-msg-1" };
     },
+    sendTelegramMediaGroup: async (options: { photos: Buffer[]; caption?: string }) => {
+      state.sendMediaGroupCalls.push(options);
+      if (state.failSend) throw new Error("Telegram sendMediaGroup failed: simulated");
+      return { messageId: "carousel-msg-1" };
+    },
   },
 });
 
 mock.module("../render/quote-card", {
   namedExports: {
     renderQuoteCard: async () => Buffer.from("fake-png"),
+    // One buffer per beat, so tests can assert on slide count without
+    // depending on real image rendering.
+    renderCarouselSlides: async (beats: unknown[]) => beats.map(() => Buffer.from("fake-slide")),
   },
 });
 
@@ -120,6 +130,7 @@ function resetState() {
   state.sendVideoCalls = [];
   state.sendMessageCalls = [];
   state.sendPhotoCalls = [];
+  state.sendMediaGroupCalls = [];
   state.failSend = false;
 }
 
@@ -153,7 +164,7 @@ test("publishes as video when the Video has an assetUrl", async () => {
   assert.equal(pub?.status, "PUBLISHED");
 });
 
-test("posts a quote card photo (with a follow-up text) when the Video has no assetUrl", async () => {
+test("posts a swipeable carousel (one slide per beat) when the Video has no assetUrl", async () => {
   resetState();
   state.video = {
     id: "video-2",
@@ -176,13 +187,15 @@ test("posts a quote card photo (with a follow-up text) when the Video has no ass
 
   const result = await publishVideoToTelegram("video-2", "account-1");
 
-  assert.equal(result.mode, "photo");
-  assert.equal(state.sendPhotoCalls.length, 1);
-  assert.equal(state.sendMessageCalls.length, 1);
+  assert.equal(result.mode, "carousel");
+  assert.equal(state.sendMediaGroupCalls.length, 1);
+  assert.equal(state.sendMediaGroupCalls[0].photos.length, 2);
+  assert.equal(state.sendPhotoCalls.length, 0);
+  assert.equal(state.sendMessageCalls.length, 0);
   assert.equal(state.sendVideoCalls.length, 0);
 });
 
-test("caption includes every beat's line, not just HOOK and CTA (regression)", async () => {
+test("carousel has one slide per beat, not just HOOK and CTA (regression)", async () => {
   resetState();
   state.video = {
     id: "video-2b",
@@ -195,6 +208,7 @@ test("caption includes every beat's line, not just HOOK and CTA (regression)", a
         { role: "PAYOFF", line: "And the payoff." },
         { role: "CTA", line: "Subscribe" },
       ],
+      hooks: [],
     },
   };
   state.account = {
@@ -206,8 +220,7 @@ test("caption includes every beat's line, not just HOOK and CTA (regression)", a
 
   await publishVideoToTelegram("video-2b", "account-1");
 
-  const call = state.sendMessageCalls[0] as { text: string };
-  assert.equal(call.text, "Hook!\n\nThe actual finding goes here.\n\nAnd the payoff.\n\nSubscribe");
+  assert.equal(state.sendMediaGroupCalls[0].photos.length, 4);
 });
 
 test("rejects a non-Telegram platform account", async () => {
@@ -294,7 +307,10 @@ test("skips sending when the video is already PUBLISHED (regression: no real re-
   const first = await publishVideoToTelegram("video-7", "account-1");
   const second = await publishVideoToTelegram("video-7", "account-1");
 
-  assert.equal(state.sendMessageCalls.length, 1);
+  // Single-beat script: carousel tier needs >=2 slides, so this falls
+  // through to the single quote-card photo tier — see the fallback chain
+  // test below for the multi-tier failure path.
+  assert.equal(state.sendPhotoCalls.length, 1);
   assert.equal(first.externalId, second.externalId);
   assert.equal(second.publicationId, first.publicationId);
 });
@@ -320,6 +336,9 @@ test("still resends when the previous attempt is FAILED, not PUBLISHED", async (
   state.failSend = false;
   const result = await publishVideoToTelegram("video-8", "account-1");
 
-  assert.equal(state.sendMessageCalls.length, 2);
+  // First attempt: photo tier fails too, falls all the way to text (1 call).
+  // Second attempt: photo tier succeeds, so text is never reached again.
+  assert.equal(state.sendMessageCalls.length, 1);
+  assert.equal(state.sendPhotoCalls.length, 2);
   assert.equal(result.externalId, "photo-msg-1");
 });

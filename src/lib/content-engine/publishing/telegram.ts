@@ -32,6 +32,16 @@ export interface SendPhotoOptions {
   signal?: AbortSignal;
 }
 
+export interface SendMediaGroupOptions {
+  botToken: string;
+  chatId: string;
+  /** 2-10 photos, in display order — Telegram's own album/carousel limit. */
+  photos: Buffer[];
+  /** Shown under the album — only the first item's caption renders. */
+  caption?: string;
+  signal?: AbortSignal;
+}
+
 export interface TelegramSendResult {
   messageId: string;
 }
@@ -40,6 +50,12 @@ interface TelegramApiResponse {
   ok: boolean;
   description?: string;
   result?: { message_id: number };
+}
+
+interface TelegramMediaGroupApiResponse {
+  ok: boolean;
+  description?: string;
+  result?: { message_id: number }[];
 }
 
 /**
@@ -103,6 +119,54 @@ export async function sendTelegramPhoto(options: SendPhotoOptions): Promise<Tele
   }
 
   return { messageId: String(data.result.message_id) };
+}
+
+/**
+ * Sends a swipeable album — the carousel format (render/quote-card.tsx's
+ * renderCarouselSlides): one slide per beat instead of a single card plus a
+ * wall of text below it. Telegram requires 2-10 items in a media group.
+ */
+export async function sendTelegramMediaGroup(
+  options: SendMediaGroupOptions
+): Promise<TelegramSendResult> {
+  if (options.photos.length < 2 || options.photos.length > 10) {
+    throw new Error(`sendTelegramMediaGroup needs 2-10 photos, got ${options.photos.length}`);
+  }
+
+  const form = new FormData();
+  form.append("chat_id", options.chatId);
+
+  const media = options.photos.map((_, index) => {
+    const item: Record<string, unknown> = {
+      type: "photo",
+      media: `attach://photo${index}`,
+    };
+    if (index === 0 && options.caption) item.caption = options.caption;
+    return item;
+  });
+  form.append("media", JSON.stringify(media));
+
+  options.photos.forEach((photo, index) => {
+    form.append(
+      `photo${index}`,
+      new Blob([new Uint8Array(photo)], { type: "image/png" }),
+      `slide${index}.png`
+    );
+  });
+
+  const response = await fetch(`${TELEGRAM_API_BASE}/bot${options.botToken}/sendMediaGroup`, {
+    method: "POST",
+    body: form,
+    signal: options.signal,
+  });
+
+  const data = (await response.json()) as TelegramMediaGroupApiResponse;
+
+  if (!response.ok || !data.ok || !data.result || data.result.length === 0) {
+    throw new Error(`Telegram sendMediaGroup failed: ${data.description ?? response.statusText}`);
+  }
+
+  return { messageId: String(data.result[0].message_id) };
 }
 
 async function callTelegram(

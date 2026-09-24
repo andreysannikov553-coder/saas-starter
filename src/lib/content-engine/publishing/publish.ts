@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/db";
-import { sendTelegramMessage, sendTelegramPhoto, sendTelegramVideo } from "./telegram";
-import { renderQuoteCard } from "../render/quote-card";
+import {
+  sendTelegramMediaGroup,
+  sendTelegramMessage,
+  sendTelegramPhoto,
+  sendTelegramVideo,
+} from "./telegram";
+import { renderCarouselSlides, renderQuoteCard } from "../render/quote-card";
 import { withStageLog } from "../observability/logger";
 
 export interface PublishToTelegramOptions {
@@ -12,7 +17,7 @@ export interface PublishToTelegramOptions {
 export interface PublishToTelegramResult {
   publicationId: string;
   externalId: string;
-  mode: "video" | "photo" | "text";
+  mode: "video" | "carousel" | "photo" | "text";
 }
 
 /**
@@ -83,7 +88,7 @@ async function doPublish(
     return {
       publicationId: existing.id,
       externalId: existing.externalId,
-      mode: video.assetUrl ? "video" : "photo",
+      mode: video.assetUrl ? "video" : "carousel",
     };
   }
 
@@ -118,40 +123,48 @@ async function doPublish(
         signal: options.signal,
       });
     } else {
-      // No render yet — post a branded quote card (best hook as headline) so
-      // the channel isn't just walls of text, then the full script as a
-      // follow-up message. Card rendering is best-effort: if it fails for
-      // any reason, fall back to the plain text post rather than losing the
-      // publish entirely.
+      // No render yet — post a swipeable carousel (one slide per beat: hook
+      // as the big-text opener, then value/payoff, closing on a subscribe
+      // slide) instead of a single image plus a wall of text below it — the
+      // "Листай ➡️" format Andrey pointed to (@ynikalnoye, 2026-09-23) reads
+      // as a real post, not a text dump with a picture bolted on. Each tier
+      // is best-effort: a media group needs >=2 slides and can itself fail
+      // to send, so this falls back to a single quote card, and that falls
+      // back to plain text, rather than losing the publish entirely.
       const topHook = pickTopHook(video.script.hooks);
+      const teaser = (topHook?.text ?? caption).slice(0, 1024);
+
       try {
-        const card = await renderQuoteCard({ headline: topHook?.text ?? caption.slice(0, 120) });
-        result = await sendTelegramPhoto({
+        const slides = await renderCarouselSlides(video.script.beats);
+        if (slides.length < 2) throw new Error("not enough beats for a carousel");
+        result = await sendTelegramMediaGroup({
           botToken,
           chatId: account.handle,
-          photo: card,
-          caption: (topHook?.text ?? caption).slice(0, 1024),
+          photos: slides,
+          caption: teaser,
           signal: options.signal,
         });
-        mode = "photo";
-        await sendTelegramMessage({
-          botToken,
-          chatId: account.handle,
-          text: caption,
-          signal: options.signal,
-        }).catch(() => {
-          // Best-effort follow-up — the photo post already succeeded and is
-          // what we record as the publication, so a failed follow-up text
-          // isn't a publish failure.
-        });
+        mode = "carousel";
       } catch {
-        mode = "text";
-        result = await sendTelegramMessage({
-          botToken,
-          chatId: account.handle,
-          text: caption,
-          signal: options.signal,
-        });
+        try {
+          const card = await renderQuoteCard({ headline: topHook?.text ?? caption.slice(0, 120) });
+          result = await sendTelegramPhoto({
+            botToken,
+            chatId: account.handle,
+            photo: card,
+            caption: teaser,
+            signal: options.signal,
+          });
+          mode = "photo";
+        } catch {
+          mode = "text";
+          result = await sendTelegramMessage({
+            botToken,
+            chatId: account.handle,
+            text: caption,
+            signal: options.signal,
+          });
+        }
       }
     }
 
