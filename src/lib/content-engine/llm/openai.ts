@@ -43,10 +43,22 @@ export class OpenAIProvider implements LLMProvider {
       },
     });
 
-    const content = response.choices[0]?.message?.content;
+    // OpenAI-compatible providers don't all agree on error shape: a real
+    // failure (e.g. an overloaded free model) can come back as HTTP 200 with
+    // an `error` field and no `choices` at all, rather than a non-2xx the SDK
+    // would throw on — response.choices[0] would otherwise crash with an
+    // opaque "Cannot read properties of undefined", not this provider's fault.
+    const apiError = (response as unknown as { error?: { message?: string } }).error;
+    if (apiError) {
+      throw new Error(
+        `OpenAI-compatible API error for ${request.schemaName}: ${apiError.message ?? JSON.stringify(apiError)}`
+      );
+    }
+
+    const content = response.choices?.[0]?.message?.content;
     if (!content) {
       throw new Error(
-        `OpenAI did not return content for ${request.schemaName} (finish_reason: ${response.choices[0]?.finish_reason})`
+        `OpenAI did not return content for ${request.schemaName} (finish_reason: ${response.choices?.[0]?.finish_reason})`
       );
     }
 

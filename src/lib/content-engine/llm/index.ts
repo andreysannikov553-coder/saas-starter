@@ -45,14 +45,17 @@ const FREE_PROVIDER_REGISTRY: {
     name: "gemini",
     apiKey: env.GEMINI_API_KEY,
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    defaultModel: "gemini-2.0-flash",
+    // gemini-2.0-flash was retired; verified against a live call (2026-09-24).
+    defaultModel: "gemini-3.6-flash",
     modelOverride: env.GEMINI_MODEL,
   },
   {
     name: "openrouter",
     apiKey: env.OPENROUTER_API_KEY,
     baseURL: "https://openrouter.ai/api/v1",
-    defaultModel: "meta-llama/llama-3.3-70b-instruct:free",
+    // OpenRouter's free catalog churns fast — verified against the live
+    // /models list (2026-09-24) for structured_outputs support, not assumed.
+    defaultModel: "nvidia/nemotron-3-super-120b-a12b:free",
     modelOverride: env.OPENROUTER_MODEL,
   },
   {
