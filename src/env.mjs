@@ -19,7 +19,21 @@ export const env = createEnv({
     // Required only for an org-level (non-workspace-scoped) Anthropic API key
     // that Anthropic rejects without an anthropic-workspace-id header.
     ANTHROPIC_WORKSPACE_ID: z.string().min(1).optional(),
-    LLM_PROVIDER: z.enum(["claude", "openai"]).default("claude"),
+
+    // More free OpenAI-compatible providers for the "fallback" chain (see
+    // src/lib/content-engine/llm/index.ts) — each optional, only used if set.
+    CEREBRAS_API_KEY: z.string().min(1).optional(),
+    CEREBRAS_MODEL: z.string().min(1).optional(),
+    GEMINI_API_KEY: z.string().min(1).optional(),
+    GEMINI_MODEL: z.string().min(1).optional(),
+    OPENROUTER_API_KEY: z.string().min(1).optional(),
+    OPENROUTER_MODEL: z.string().min(1).optional(),
+    MISTRAL_API_KEY: z.string().min(1).optional(),
+    MISTRAL_MODEL: z.string().min(1).optional(),
+
+    // "fallback" (default) chains every configured free provider above, then
+    // Claude — see getLLMProvider. "claude"/"openai" pin a single provider.
+    LLM_PROVIDER: z.enum(["claude", "openai", "fallback"]).default("fallback"),
 
     // ElevenLabs (content engine narration — optional: only needed once a
     // PlatformAccount/Character actually calls the TTS stage)
@@ -61,6 +75,14 @@ export const env = createEnv({
     OPENAI_MODEL: process.env.OPENAI_MODEL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     ANTHROPIC_WORKSPACE_ID: process.env.ANTHROPIC_WORKSPACE_ID,
+    CEREBRAS_API_KEY: process.env.CEREBRAS_API_KEY,
+    CEREBRAS_MODEL: process.env.CEREBRAS_MODEL,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    GEMINI_MODEL: process.env.GEMINI_MODEL,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
+    MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
+    MISTRAL_MODEL: process.env.MISTRAL_MODEL,
     LLM_PROVIDER: process.env.LLM_PROVIDER,
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
     CRON_SECRET: process.env.CRON_SECRET,
