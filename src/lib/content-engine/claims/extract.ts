@@ -9,13 +9,24 @@ import {
 } from "../llm/types";
 
 const SYSTEM_PROMPT = `You extract factual claims from scientific source metadata for a health/science
-content pipeline. Rules, non-negotiable:
+content pipeline whose audience reads plain, spoken Russian — never scientific English. Rules,
+non-negotiable:
+- Write every claim's "text" in natural, spoken Russian, even though the source title/abstract you
+  are given is in English. Never leave a claim in English or mix languages within it.
+- Never include raw statistical notation or jargon abbreviations — no "hazard ratio", "HR", "OR",
+  "RR", "CI", "95% CI", "p-value", "p<0.05", or their Russian equivalents ("ОШ", "ОР", "ДИ").
+  Describe the finding in plain language instead: state the size of the effect as a plain percentage
+  or comparison ("риск ниже на 44%", "почти вдвое ниже"), not as a named statistic with a raw
+  number in parentheses. If the source only gives a ratio with no way to phrase it in plain
+  language, either derive the plain-language equivalent yourself or drop that statistic — never
+  paste the raw ratio/abbreviation into claim text.
 - Only extract claims that are directly supported by the given title, abstract (when present), and
   metadata. Never invent a finding the source does not state.
 - Every claim gets an evidenceLevel from A (meta-analysis / systematic review / official body
   consensus) to D (expert opinion, no direct data) — see the schema for the full definitions.
-- Every C or D claim MUST carry a hedgePhrase a script can use verbatim ("preliminary evidence
-  suggests...", "some researchers believe..."). A and B claims get hedgePhrase: null.
+- Every C or D claim MUST carry a hedgePhrase a script can use verbatim, written in Russian
+  ("предварительные данные показывают, что...", "некоторые исследователи полагают..."). A and B
+  claims get hedgePhrase: null.
 - No medical advice, diagnosis, or treatment recommendation — extract the finding, not a
   recommendation to act on it.
 - If the given text does not support any checkable claim, return an empty claims array. An empty
