@@ -65,6 +65,27 @@ const FREE_PROVIDER_REGISTRY: {
     defaultModel: "mistral-small-latest",
     modelOverride: env.MISTRAL_MODEL,
   },
+  {
+    // Free with any GitHub account — a Personal Access Token with "Models"
+    // read permission, no separate signup. Proxies several vendors' models
+    // (OpenAI, Meta, Mistral, ...) through one GitHub-hosted endpoint.
+    name: "github",
+    apiKey: env.GITHUB_MODELS_TOKEN,
+    baseURL: "https://models.github.ai/inference",
+    defaultModel: "openai/gpt-4o-mini",
+    modelOverride: env.GITHUB_MODELS_MODEL,
+  },
+  {
+    // Cloudflare Workers AI free daily allowance — needs both the account id
+    // (in the URL) and an API token, unlike the single-key providers above.
+    name: "cloudflare",
+    apiKey: env.CLOUDFLARE_API_TOKEN,
+    baseURL: env.CLOUDFLARE_ACCOUNT_ID
+      ? `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/ai/v1`
+      : "",
+    defaultModel: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    modelOverride: env.CLOUDFLARE_MODEL,
+  },
 ];
 
 /**
@@ -93,8 +114,11 @@ export function getLLMProvider(provider?: "claude" | "openai" | "fallback"): LLM
     return buildClaudeProvider();
   }
 
-  // "fallback": chain every free provider with a configured key, then Claude.
-  const chain: LLMProvider[] = FREE_PROVIDER_REGISTRY.filter((cfg) => cfg.apiKey).map((cfg) =>
+  // "fallback": chain every free provider with a configured key (and, for
+  // Cloudflare, an account id — its baseURL is empty without one), then Claude.
+  const chain: LLMProvider[] = FREE_PROVIDER_REGISTRY.filter(
+    (cfg) => cfg.apiKey && cfg.baseURL
+  ).map((cfg) =>
     buildOpenAIProvider(cfg.apiKey, cfg.baseURL, cfg.modelOverride ?? cfg.defaultModel, cfg.name)
   );
   if (env.ANTHROPIC_API_KEY) {
