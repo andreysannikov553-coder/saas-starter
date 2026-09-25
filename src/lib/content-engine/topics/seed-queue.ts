@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/db";
+import { scanTrendingHealthTopics } from "./trend-scanner";
 
 /**
- * Curated starter queue for the health/sport channel — stand-in for the
- * Trend Scanner/Idea Generator stage (discovery doc's start of the funnel,
- * not built yet per docs/PRODUCTION_READINESS.md §1/§12). Each title is a
- * distinct, evidence-checkable angle Europe PMC can actually return sources
- * for — kept general enough that research doesn't come back empty, specific
- * enough that the claim/hook stages have something concrete to grab onto.
+ * Curated starter queue for the health/sport channel — a fallback/baseline
+ * alongside seedTrendingTopicQueue below (the real "Virality Skill" signal,
+ * added 2026-09-25). Each title is a distinct, evidence-checkable angle
+ * Europe PMC can actually return sources for — kept general enough that
+ * research doesn't come back empty, specific enough that the claim/hook
+ * stages have something concrete to grab onto.
  */
 export const HEALTH_SPORT_TOPIC_QUEUE: string[] = [
   "sleep duration and cardiovascular mortality",
@@ -63,6 +64,33 @@ export interface SeedResult {
   skipped: number;
 }
 
+async function resolveOrg(orgIdArg?: string) {
+  return orgIdArg
+    ? prisma.organization.findUniqueOrThrow({ where: { id: orgIdArg } })
+    : ((await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } })) ??
+        (await prisma.organization.create({ data: { name: "Default" } })));
+}
+
+/** Inserts candidate titles not already present for the org (case-insensitive), tagged with `pillar`. */
+async function insertNewTopics(
+  orgId: string,
+  candidates: string[],
+  pillar: string
+): Promise<{ created: number; skipped: number }> {
+  const existing = await prisma.topic.findMany({ where: { orgId }, select: { title: true } });
+  const existingTitles = new Set(existing.map((t) => t.title.trim().toLowerCase()));
+
+  const toCreate = candidates.filter((title) => !existingTitles.has(title.trim().toLowerCase()));
+
+  if (toCreate.length > 0) {
+    await prisma.topic.createMany({
+      data: toCreate.map((title) => ({ orgId, title, pillar })),
+    });
+  }
+
+  return { created: toCreate.length, skipped: candidates.length - toCreate.length };
+}
+
 /**
  * Inserts any queue titles not already present as a Topic for the org
  * (case-insensitive match), so this is safe to re-run — it only tops up the
@@ -70,30 +98,37 @@ export interface SeedResult {
  * Default" convention as scripts/run-topic.ts and scripts/add-telegram-account.ts.
  */
 export async function seedHealthSportTopicQueue(orgIdArg?: string): Promise<SeedResult> {
-  const org = orgIdArg
-    ? await prisma.organization.findUniqueOrThrow({ where: { id: orgIdArg } })
-    : ((await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } })) ??
-      (await prisma.organization.create({ data: { name: "Default" } })));
+  const org = await resolveOrg(orgIdArg);
+  const { created, skipped } = await insertNewTopics(
+    org.id,
+    HEALTH_SPORT_TOPIC_QUEUE,
+    "health-sport"
+  );
+  return { orgId: org.id, created, skipped };
+}
+
+export interface SeedTrendingResult extends SeedResult {
+  headlinesScanned: number;
+}
+
+/**
+ * The "Virality Skill" — scans current health/fitness news (trend-scanner.ts)
+ * and tops up the queue with what it finds, tagged pillar: "trending" so
+ * it's distinguishable from the evergreen curated list above. Safe to re-run
+ * on a schedule: dedupes against every existing topic for the org, same as
+ * seedHealthSportTopicQueue.
+ */
+export async function seedTrendingTopicQueue(orgIdArg?: string): Promise<SeedTrendingResult> {
+  const org = await resolveOrg(orgIdArg);
 
   const existing = await prisma.topic.findMany({
     where: { orgId: org.id },
     select: { title: true },
   });
-  const existingTitles = new Set(existing.map((t) => t.title.trim().toLowerCase()));
+  const existingTitles = existing.map((t) => t.title);
 
-  const toCreate = HEALTH_SPORT_TOPIC_QUEUE.filter(
-    (title) => !existingTitles.has(title.trim().toLowerCase())
-  );
+  const scan = await scanTrendingHealthTopics(existingTitles);
+  const { created, skipped } = await insertNewTopics(org.id, scan.topics, "trending");
 
-  if (toCreate.length > 0) {
-    await prisma.topic.createMany({
-      data: toCreate.map((title) => ({ orgId: org.id, title, pillar: "health-sport" })),
-    });
-  }
-
-  return {
-    orgId: org.id,
-    created: toCreate.length,
-    skipped: HEALTH_SPORT_TOPIC_QUEUE.length - toCreate.length,
-  };
+  return { orgId: org.id, created, skipped, headlinesScanned: scan.headlinesScanned };
 }
