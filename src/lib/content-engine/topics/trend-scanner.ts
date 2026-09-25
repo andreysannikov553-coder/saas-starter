@@ -155,7 +155,11 @@ export async function scanTrendingHealthTopics(
         schemaName: "trending_topics",
         schema: TOPIC_JSON_SCHEMA,
         parse: parseTopics,
-        maxTokens: 1024,
+        // Generous: some providers in the fallback chain are reasoning
+        // models that spend tokens on hidden chain-of-thought before the
+        // JSON answer — 1024 truncated mid-response and broke every
+        // provider in one real run (2026-09-25).
+        maxTokens: 4096,
       });
 
       return { headlinesScanned: headlines.length, topics: result };
