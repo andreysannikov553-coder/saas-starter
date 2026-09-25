@@ -65,16 +65,10 @@ const FREE_PROVIDER_REGISTRY: {
     defaultModel: "mistral-small-latest",
     modelOverride: env.MISTRAL_MODEL,
   },
-  {
-    // Free with any GitHub account — a Personal Access Token with "Models"
-    // read permission, no separate signup. Proxies several vendors' models
-    // (OpenAI, Meta, Mistral, ...) through one GitHub-hosted endpoint.
-    name: "github",
-    apiKey: env.GITHUB_MODELS_TOKEN,
-    baseURL: "https://models.github.ai/inference",
-    defaultModel: "openai/gpt-4o-mini",
-    modelOverride: env.GITHUB_MODELS_MODEL,
-  },
+  // GitHub Models was fully retired 2026-07-30 (playground, catalog,
+  // inference API, BYOK — all gone). Its entry lived here for one day
+  // (2026-09-24) before we found that out live; removed rather than kept
+  // dead in the chain. GITHUB_MODELS_TOKEN/_MODEL env vars are unused now.
   {
     // Cloudflare Workers AI free daily allowance — needs both the account id
     // (in the URL) and an API token, unlike the single-key providers above.

@@ -30,10 +30,6 @@ export const env = createEnv({
     OPENROUTER_MODEL: z.string().min(1).optional(),
     MISTRAL_API_KEY: z.string().min(1).optional(),
     MISTRAL_MODEL: z.string().min(1).optional(),
-    // GitHub Models — free with any GitHub account, a PAT with "Models: read"
-    // permission (github.com/settings/personal-access-tokens), not a signup.
-    GITHUB_MODELS_TOKEN: z.string().min(1).optional(),
-    GITHUB_MODELS_MODEL: z.string().min(1).optional(),
     // Cloudflare Workers AI — needs both, unlike the single-key providers above.
     CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
     CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
@@ -91,8 +87,6 @@ export const env = createEnv({
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
     MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
     MISTRAL_MODEL: process.env.MISTRAL_MODEL,
-    GITHUB_MODELS_TOKEN: process.env.GITHUB_MODELS_TOKEN,
-    GITHUB_MODELS_MODEL: process.env.GITHUB_MODELS_MODEL,
     CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
     CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
     CLOUDFLARE_MODEL: process.env.CLOUDFLARE_MODEL,
