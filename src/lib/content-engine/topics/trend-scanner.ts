@@ -5,23 +5,42 @@ import { withStageLog } from "../observability/logger";
  * Trend Scanner — the "Virality Skill" idea from the health/sport channel
  * discussion (2026-09-25): instead of only a static curated topic list
  * (seed-queue.ts), pull real signal on what's currently being covered in
- * health/fitness news and turn it into researchable topic titles.
+ * health/fitness/sport news and turn it into researchable topic titles.
  *
  * Reddit (the obvious free source for "what's resonating") is unreachable
  * from this environment — DNS just doesn't resolve it, unlike every other
  * host tried. Google News RSS search is free, keyless, and reachable, and
- * gives the same real signal for this purpose: what health/fitness stories
+ * gives the same real signal for this purpose: what health/fitness/sport stories
  * are actually running right now, not an evergreen textbook list.
  */
 
-const SEED_QUERIES = [
+/**
+ * The channel's niche is health AND sport, so the seed queries are kept as
+ * two explicit halves: with only the health list (where this started) the
+ * scan returned almost nothing about training itself — "exercise longevity"
+ * was the single sport-adjacent query, and it pulls epidemiology, not
+ * strength/performance research. Both halves must stay populated; dropping
+ * the sport half would quietly narrow the channel back to medical news.
+ */
+const HEALTH_SEED_QUERIES = [
   "daily steps mortality study",
-  "exercise longevity study",
   "diet health study",
   "sleep health study",
   "supplement health study",
   "heart disease prevention study",
+  "exercise longevity study",
 ];
+
+const SPORT_SEED_QUERIES = [
+  "strength training muscle growth study",
+  "protein intake muscle mass study",
+  "high intensity interval training fitness study",
+  "running injury prevention study",
+  "stretching warm up performance study",
+  "athletic recovery sleep study",
+];
+
+export const NICHE_SEED_QUERIES = [...HEALTH_SEED_QUERIES, ...SPORT_SEED_QUERIES];
 
 const NEWS_RESULTS_PER_QUERY = 8;
 const RECENCY_WINDOW = "14d";
@@ -63,7 +82,7 @@ function decodeXmlEntities(text: string): string {
 /** Fetches raw headlines across every seed query, deduped. */
 export async function fetchTrendingHealthHeadlines(signal?: AbortSignal): Promise<string[]> {
   const results = await Promise.all(
-    SEED_QUERIES.map((q) => fetchHeadlinesForQuery(q, signal).catch(() => [] as string[]))
+    NICHE_SEED_QUERIES.map((q) => fetchHeadlinesForQuery(q, signal).catch(() => [] as string[]))
   );
   const seen = new Set<string>();
   const headlines: NewsHeadline[] = [];
@@ -79,13 +98,18 @@ export async function fetchTrendingHealthHeadlines(signal?: AbortSignal): Promis
   return headlines.map((h) => h.title);
 }
 
-const TOPIC_SYSTEM_PROMPT = `You turn real current health/fitness news headlines into short, neutral,
-evidence-checkable research topic titles — the same style used to search Europe PMC (a biomedical
-literature database), never the sensational framing of the original headline.
+const TOPIC_SYSTEM_PROMPT = `You turn real current health, fitness and sport-science news headlines into
+short, neutral, evidence-checkable research topic titles — the same style used to search Europe PMC
+(a biomedical literature database), never the sensational framing of the original headline.
 
 Rules, non-negotiable:
+- Stay inside the channel's niche: health, fitness, and sport/training. Both sides count — a
+  training/performance relationship ("resistance training and muscle hypertrophy", "protein timing
+  and strength gains") is as welcome as a clinical one. Anything outside it is skipped, not
+  stretched to fit.
 - Each output title states a specific factor-outcome relationship, e.g. "daily steps and mortality",
-  "sleep duration and cardiovascular mortality", "creatine supplementation and cognitive function".
+  "sleep duration and cardiovascular mortality", "creatine supplementation and cognitive function",
+  "resistance training frequency and muscle hypertrophy".
   Lowercase, no punctuation at the end, in English regardless of the headline's language.
 - Strip all sensationalism, brand names, and news-style hooks ("The 10,000-Steps Myth Is Dead") —
   keep only the underlying checkable relationship a scientific search would actually match.
@@ -127,7 +151,7 @@ export interface ScanTrendingTopicsResult {
 }
 
 /**
- * Scans current health/fitness news and turns it into researchable topic
+ * Scans current health/fitness/sport news and turns it into researchable topic
  * titles, skipping anything already in `existingTopics` (case-insensitive).
  */
 export async function scanTrendingHealthTopics(
@@ -146,7 +170,7 @@ export async function scanTrendingHealthTopics(
       const result = await provider.generateStructured({
         system: TOPIC_SYSTEM_PROMPT,
         prompt: [
-          "Current health/fitness news headlines:",
+          "Current health/fitness/sport news headlines:",
           ...headlines.map((h) => `- ${h}`),
           "",
           "Existing topics (do not duplicate):",

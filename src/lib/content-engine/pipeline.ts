@@ -5,6 +5,7 @@ import { generateScriptForTopic } from "./scripts/generate";
 import { generateHooksForScript } from "./hooks/generate";
 import { renderNarrationForScript, getOrCreateVideoForScript } from "./render/narrate-video";
 import { publishVideoToTelegram } from "./publishing/publish";
+import { publishVideoToAllPlatforms, type PlatformPublishOutcome } from "./publishing/publish-all";
 import { withStageLog } from "./observability/logger";
 
 export interface RunContentPipelineOptions {
@@ -23,7 +24,16 @@ export interface RunContentPipelineOptions {
      * narration needs a separate ElevenLabs key that publishing doesn't.
      */
     ttsVoiceId?: string;
-    telegramPlatformAccountId: string;
+    /** Publish to this one Telegram account — the original, narrowest option. */
+    telegramPlatformAccountId?: string;
+    /**
+     * Fan out to every platform account configured on the org instead
+     * (YouTube Shorts, Instagram, TikTok, Telegram — see
+     * publishing/publish-all.ts). Independent per platform: one platform
+     * failing does not fail the pipeline run, and each outcome lands in
+     * `platformResults`.
+     */
+    allPlatforms?: { orgId: string };
   };
 }
 
@@ -37,7 +47,10 @@ export interface RunContentPipelineResult {
   bestHookScore: number | null;
   hookBelowThreshold: boolean | null;
   videoId: string | null;
+  /** The Telegram publish's Publication id, or the first successful one of a fan-out. */
   publicationId: string | null;
+  /** One row per platform account, when `publish.allPlatforms` was used. */
+  platformResults: PlatformPublishOutcome[] | null;
   /** Where the run stopped, when it didn't reach publishing — never a thrown error for an expected stop. */
   stoppedAt: "research" | "claims" | "script" | "hooks" | "publish" | null;
 }
@@ -54,11 +67,16 @@ export interface RunContentPipelineResult {
  * reports where, rather than trying to push through with no input.
  *
  * `publish` is optional and separate from the rest on purpose: publishing
- * needs a live Telegram bot this sandbox doesn't have, so a caller can
+ * needs live platform credentials this sandbox doesn't have, so a caller can
  * exercise research through hook-scoring (the parts with automated tests
- * behind them) without one. Within `publish`, `ttsVoiceId` is itself
+ * behind them) without any. Within `publish`, `ttsVoiceId` is itself
  * optional — narration needs a separate ElevenLabs key, so a caller can
  * publish the script as text before that key exists.
+ *
+ * `publish.allPlatforms` swaps the single Telegram post for the fan-out
+ * across every platform account on the org (publishing/publish-all.ts):
+ * YouTube Shorts and TikTok take the rendered video, Instagram takes a Reel
+ * when there's a render and a slide carousel when there isn't.
  */
 export async function runContentPipeline(
   topicId: string,
@@ -87,6 +105,7 @@ async function doRunContentPipeline(
     hookBelowThreshold: null,
     videoId: null,
     publicationId: null,
+    platformResults: null,
     stoppedAt: null,
   };
 
@@ -147,6 +166,22 @@ async function doRunContentPipeline(
         })
       ).videoId
     : await getOrCreateVideoForScript(script.scriptId);
+
+  if (options.publish.allPlatforms) {
+    const outcomes = await publishVideoToAllPlatforms(
+      script.scriptId,
+      options.publish.allPlatforms.orgId
+    );
+    result.platformResults = outcomes;
+    result.publicationId = outcomes.find((o) => o.status === "PUBLISHED")?.publicationId ?? null;
+    return result;
+  }
+
+  if (!options.publish.telegramPlatformAccountId) {
+    throw new Error(
+      "publish needs either telegramPlatformAccountId or allPlatforms: { orgId } — neither was given"
+    );
+  }
 
   const publication = await publishVideoToTelegram(
     result.videoId,

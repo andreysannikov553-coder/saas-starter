@@ -16,6 +16,12 @@
  *                                  (see scripts/add-telegram-account.ts) once
  *                                  hooks pass. Without it, the run stops
  *                                  after hook scoring.
+ *   --publish-all                  Publish to every platform account on the
+ *                                  org instead — YouTube Shorts, Instagram,
+ *                                  TikTok, Telegram (see
+ *                                  src/lib/content-engine/publishing/publish-all.ts).
+ *                                  Platforms are independent: one failing
+ *                                  does not stop the rest.
  *   --voice=<ttsVoiceId>           Narrate with this ElevenLabs voice before
  *                                  publishing. Without it (but with
  *                                  --publish), the script publishes as text.
@@ -34,11 +40,12 @@ async function main() {
   const title = positional[0];
   const orgIdArg = positional[1];
   const telegramPlatformAccountId = parseFlag("publish");
+  const publishAll = process.argv.includes("--publish-all");
   const ttsVoiceId = parseFlag("voice");
 
   if (!title) {
     console.error(
-      'Usage: npx tsx --env-file=.env.local scripts/run-topic.ts "Topic title" [orgId] [--publish=<platformAccountId>] [--voice=<ttsVoiceId>]'
+      'Usage: npx tsx --env-file=.env.local scripts/run-topic.ts "Topic title" [orgId] [--publish=<platformAccountId> | --publish-all] [--voice=<ttsVoiceId>]'
     );
     process.exitCode = 1;
     return;
@@ -57,7 +64,11 @@ async function main() {
 
   console.log("\nRunning pipeline (real calls where credentials/network allow)...\n");
   const result = await runContentPipeline(topic.id, {
-    publish: telegramPlatformAccountId ? { telegramPlatformAccountId, ttsVoiceId } : undefined,
+    publish: publishAll
+      ? { allPlatforms: { orgId: org.id }, ttsVoiceId }
+      : telegramPlatformAccountId
+        ? { telegramPlatformAccountId, ttsVoiceId }
+        : undefined,
   });
 
   console.log("\n=== RESULT ===");
@@ -65,6 +76,11 @@ async function main() {
 
   if (result.stoppedAt) {
     console.log(`\nStopped at stage: ${result.stoppedAt}`);
+  } else if (result.platformResults) {
+    for (const outcome of result.platformResults) {
+      const detail = outcome.externalId ?? outcome.reason ?? "";
+      console.log(`${outcome.platform} (${outcome.handle}): ${outcome.status} ${detail}`);
+    }
   } else {
     console.log("\nPublished. See result.publicationId above.");
   }

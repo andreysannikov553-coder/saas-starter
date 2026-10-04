@@ -50,6 +50,21 @@ export const env = createEnv({
     CRON_SECRET: z.string().min(1).optional(),
     TELEGRAM_PLATFORM_ACCOUNT_ID: z.string().min(1).optional(),
 
+    // YouTube (Data API v3 — OAuth "Desktop app" client, see scripts/youtube-oauth.ts).
+    // Only the setup scripts read these: the publisher itself takes the same
+    // three values out of PlatformAccount.credentials, written by
+    // scripts/add-youtube-account.ts.
+    YOUTUBE_CLIENT_ID: z.string().min(1).optional(),
+    YOUTUBE_CLIENT_SECRET: z.string().min(1).optional(),
+    YOUTUBE_REFRESH_TOKEN: z.string().min(1).optional(),
+    YOUTUBE_CHANNEL_ID: z.string().min(1).optional(),
+
+    // TikTok (Content Posting API — developers.tiktok.com app credentials).
+    // Needed only to refresh a stored access token, which expires after 24h;
+    // see scripts/add-tiktok-account.ts --refresh-token.
+    TIKTOK_CLIENT_KEY: z.string().min(1).optional(),
+    TIKTOK_CLIENT_SECRET: z.string().min(1).optional(),
+
     // Stripe
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
@@ -94,6 +109,12 @@ export const env = createEnv({
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
     CRON_SECRET: process.env.CRON_SECRET,
     TELEGRAM_PLATFORM_ACCOUNT_ID: process.env.TELEGRAM_PLATFORM_ACCOUNT_ID,
+    YOUTUBE_CLIENT_ID: process.env.YOUTUBE_CLIENT_ID,
+    YOUTUBE_CLIENT_SECRET: process.env.YOUTUBE_CLIENT_SECRET,
+    YOUTUBE_REFRESH_TOKEN: process.env.YOUTUBE_REFRESH_TOKEN,
+    YOUTUBE_CHANNEL_ID: process.env.YOUTUBE_CHANNEL_ID,
+    TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY,
+    TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,

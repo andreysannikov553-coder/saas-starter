@@ -38,9 +38,12 @@ mock.module("../llm", {
 
 let fetchTrendingHealthHeadlines: typeof import("./trend-scanner").fetchTrendingHealthHeadlines;
 let scanTrendingHealthTopics: typeof import("./trend-scanner").scanTrendingHealthTopics;
+let NICHE_SEED_QUERIES: typeof import("./trend-scanner").NICHE_SEED_QUERIES;
 
 before(async () => {
-  ({ fetchTrendingHealthHeadlines, scanTrendingHealthTopics } = await import("./trend-scanner"));
+  ({ fetchTrendingHealthHeadlines, scanTrendingHealthTopics, NICHE_SEED_QUERIES } = await import(
+    "./trend-scanner"
+  ));
 });
 
 function resetState() {
@@ -54,6 +57,19 @@ function rssResponse(titles: string[]): Response {
   const xml = `<?xml version="1.0"?><rss><channel><title>"q" - Google News</title>${items}</channel></rss>`;
   return { ok: true, status: 200, statusText: "OK", text: async () => xml } as Response;
 }
+
+test("the seed queries cover both halves of the niche, health and sport", async () => {
+  // The channel is health AND sport; a health-only seed list silently
+  // narrows it back to medical news (see trend-scanner.ts), so both halves
+  // are asserted here rather than left to a reviewer to notice.
+  const queries = NICHE_SEED_QUERIES.join(" ");
+  for (const healthTerm of ["mortality", "diet", "sleep"]) {
+    assert.ok(queries.includes(healthTerm), `expected a health seed query about ${healthTerm}`);
+  }
+  for (const sportTerm of ["strength training", "muscle", "running", "performance"]) {
+    assert.ok(queries.includes(sportTerm), `expected a sport seed query about ${sportTerm}`);
+  }
+});
 
 test("fetchTrendingHealthHeadlines dedupes titles across queries and drops the feed's own title", async () => {
   resetState();
