@@ -5,7 +5,8 @@ import {
   sendTelegramPhoto,
   sendTelegramVideo,
 } from "./telegram";
-import { renderCarouselSlides, renderQuoteCard } from "../render/quote-card";
+import { renderQuoteCard } from "../render/quote-card";
+import { renderPostSlides } from "../render/slides";
 import { withStageLog } from "../observability/logger";
 
 export interface PublishToTelegramOptions {
@@ -135,7 +136,7 @@ async function doPublish(
       const teaser = (topHook?.text ?? caption).slice(0, 1024);
 
       try {
-        const slides = await renderCarouselSlides(video.script.beats);
+        const slides = await renderPostSlides(video.script);
         if (slides.length < 2) throw new Error("not enough beats for a carousel");
         result = await sendTelegramMediaGroup({
           botToken,

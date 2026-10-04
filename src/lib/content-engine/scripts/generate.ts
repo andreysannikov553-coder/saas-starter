@@ -22,7 +22,7 @@ Rules, non-negotiable:
   parenthetical raw numbers like "(0.44)" or "(≈1.17)" tacked onto a sentence. State effect sizes
   in plain spoken Russian only — a percentage or an everyday comparison ("риск ниже почти вдвое"),
   never a named statistic with a bare number next to it.
-- Pick exactly one of the six templates you are given and follow its shape.
+- Pick exactly one of the templates you are given and follow its shape.
 - Beat roles, in the order the video plays: HOOK (the first 1-2 seconds — stop the scroll, no
   slow windup), CURIOSITY (opens a question the viewer wants answered), VALUE (the substance —
   this is where claims get cited), PAYOFF (one concrete fact or number that closes the loop
@@ -31,6 +31,11 @@ Rules, non-negotiable:
   given. Never state a fact that isn't backed by one of those claims. If none of the given claims
   fit the beat you want to write, write a different beat instead — do not invent a claim or cite
   claimId: null for a factual statement.
+- The claimId goes ONLY in the beat's separate "claimId" JSON field — never in the "line" text
+  itself. The "line" is what gets read aloud and printed on screen: it must contain no claimId,
+  no UUID, no "(claimId: ...)", no source markers, no citation brackets, no English words or
+  Latin letters at all — natural spoken Russian only, exactly as if a person were saying it out
+  loud with no footnotes.
 - If a cited claim carries a hedge phrase, the beat's line MUST use that hedge phrase (e.g.
   "preliminary evidence suggests...") — never state it as settled fact.
 - No diagnoses, no treatment promises, no fear-based framing.

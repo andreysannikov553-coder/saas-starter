@@ -12,10 +12,15 @@ function validRaw(overrides: Record<string, unknown> = {}) {
     templateSlug: "mechanism-explainer",
     targetSeconds: 25,
     beats: [
-      { role: BeatRole.HOOK, line: "Did you know...", visualIntent: null, claimId: null },
-      { role: BeatRole.CURIOSITY, line: "But why?", visualIntent: "close-up", claimId: null },
-      { role: BeatRole.VALUE, line: "Because X.", visualIntent: null, claimId: CLAIM_A },
-      { role: BeatRole.PAYOFF, line: "So Y.", visualIntent: null, claimId: CLAIM_B },
+      { role: BeatRole.HOOK, line: "Знали ли вы...", visualIntent: null, claimId: null },
+      { role: BeatRole.CURIOSITY, line: "Но почему?", visualIntent: "крупный план", claimId: null },
+      {
+        role: BeatRole.VALUE,
+        line: "Потому что так показали исследования.",
+        visualIntent: null,
+        claimId: CLAIM_A,
+      },
+      { role: BeatRole.PAYOFF, line: "Вот и весь секрет.", visualIntent: null, claimId: CLAIM_B },
     ],
     ...overrides,
   };
@@ -32,10 +37,10 @@ test("parseGeneratedScript accepts a valid full script", () => {
 test("parseGeneratedScript rejects a hallucinated claimId", () => {
   const raw = validRaw({
     beats: [
-      { role: BeatRole.HOOK, line: "Hi", visualIntent: null, claimId: null },
-      { role: BeatRole.CURIOSITY, line: "Hi", visualIntent: null, claimId: null },
-      { role: BeatRole.VALUE, line: "Hi", visualIntent: null, claimId: "made-up-id" },
-      { role: BeatRole.PAYOFF, line: "Hi", visualIntent: null, claimId: null },
+      { role: BeatRole.HOOK, line: "Привет", visualIntent: null, claimId: null },
+      { role: BeatRole.CURIOSITY, line: "Привет", visualIntent: null, claimId: null },
+      { role: BeatRole.VALUE, line: "Привет", visualIntent: null, claimId: "made-up-id" },
+      { role: BeatRole.PAYOFF, line: "Привет", visualIntent: null, claimId: null },
     ],
   });
   assert.throws(() => parseGeneratedScript(raw, KNOWN), /not one of the claims offered/);
@@ -56,7 +61,7 @@ test("parseGeneratedScript rejects an invalid template slug", () => {
 
 test("parseGeneratedScript rejects too few beats", () => {
   const raw = validRaw({
-    beats: [{ role: BeatRole.HOOK, line: "Hi", visualIntent: null, claimId: null }],
+    beats: [{ role: BeatRole.HOOK, line: "Привет", visualIntent: null, claimId: null }],
   });
   assert.throws(
     () => parseGeneratedScript(raw, KNOWN),
