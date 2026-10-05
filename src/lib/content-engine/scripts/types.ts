@@ -1,10 +1,11 @@
 import { BeatRole } from "@prisma/client";
 
 /**
- * The six reusable scenario templates from discovery doc section 18.2 —
- * the trend research done for this project. Each is a proven scaffold, not
- * a free-form prompt: the model picks one and fills it, it doesn't invent
- * structure from scratch.
+ * The reusable scenario templates — the six from discovery doc section 18.2
+ * (the trend research done for this project) plus habit-contrast, added for
+ * the comparison-card format. Each is a proven scaffold, not a free-form
+ * prompt: the model picks one and fills it, it doesn't invent structure from
+ * scratch.
  */
 export const SCRIPT_TEMPLATES = [
   {
@@ -39,6 +40,12 @@ export const SCRIPT_TEMPLATES = [
     slug: "hidden-detail",
     label: "Скрытая деталь",
     description: "Everyone has seen it and missed the real detail — a curiosity gap payoff.",
+  },
+  {
+    slug: "habit-contrast",
+    label: "Двое, одна черта, разный выбор",
+    description:
+      "Two people share a trait (same age, same complaint) and differ in one daily habit — the contrast carries the fact. Pick this ONLY when the claims are about a habit a viewer could change today (steps, sleep time, screen time, a meal), never for a pure mechanism or a product debunk. Publishing renders this one as a two-character comparison image instead of a text carousel.",
   },
 ] as const;
 
@@ -93,7 +100,8 @@ export function buildGeneratedScriptJsonSchema(claimIds: string[]) {
       templateSlug: {
         type: "string",
         enum: SCRIPT_TEMPLATE_SLUGS,
-        description: "Which of the six proven scenario templates this script follows.",
+        description:
+          "Which of the proven scenario templates listed in the prompt this script follows.",
       },
       targetSeconds: {
         type: "integer",
@@ -172,6 +180,31 @@ export function parseGeneratedScript(
   };
 }
 
+const LEAKED_CLAIM_ID_PATTERN =
+  /claimid|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+// 2+ consecutive Latin letters — catches leaked English words/abbreviations
+// (jargon like "PMID", drug/study names) without tripping on stray digits or
+// punctuation that legitimately appear in Russian text.
+const LATIN_LETTERS_PATTERN = /[a-zA-Z]{2,}/;
+
+/**
+ * Guards any model-written text that ends up spoken aloud or printed on a
+ * card — beat lines, comparison-card copy — against the two ways a model
+ * ruins one: leaking the machinery (a claimId/UUID lands in the sentence,
+ * publishing "(claimId: 09a4f349-...)" as if it were words) and leaking
+ * English into a Russian channel. Both throw rather than publish, the same
+ * way a hallucinated claimId does.
+ */
+export function assertSpokenRussian(text: string, label: string): void {
+  if (LEAKED_CLAIM_ID_PATTERN.test(text)) {
+    throw new Error(`${label} leaks a claimId/UUID into the spoken text: "${text}"`);
+  }
+
+  if (LATIN_LETTERS_PATTERN.test(text)) {
+    throw new Error(`${label} contains Latin letters (must be Russian only): "${text}"`);
+  }
+}
+
 function validateBeat(
   entry: unknown,
   index: number,
@@ -190,6 +223,8 @@ function validateBeat(
   if (typeof line !== "string" || line.trim().length === 0) {
     throw new Error(`beats[${index}].line must be a non-empty string`);
   }
+
+  assertSpokenRussian(line, `beats[${index}].line`);
 
   if (claimId !== null && typeof claimId === "string" && !knownClaimIds.has(claimId)) {
     throw new Error(

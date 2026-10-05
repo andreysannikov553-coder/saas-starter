@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getOrCreateVideoForScript } from "../render/narrate-video";
-import { renderCarouselSlides, renderQuoteCard } from "../render/quote-card";
+import { renderQuoteCard } from "../render/quote-card";
+import { renderPostSlides } from "../render/slides";
 import { uploadRenderAsset } from "../storage";
 import { withStageLog } from "../observability/logger";
 import {
@@ -163,7 +164,7 @@ async function doPublishSocial(
   const caption = (topHook?.text ?? script.beats[0]?.line ?? "").slice(0, captionLimit);
 
   try {
-    const slides = await renderCarouselSlides(script.beats);
+    const slides = await renderPostSlides(script);
     let externalId: string;
     let mode: SocialPublishResult["mode"];
 

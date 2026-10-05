@@ -87,10 +87,10 @@ test("generateScriptForTopic persists a script when the topic has claims", async
     templateSlug: "mechanism-explainer",
     targetSeconds: 20,
     beats: [
-      { role: BeatRole.HOOK, line: "Hook line", visualIntent: null, claimId: null },
-      { role: BeatRole.CURIOSITY, line: "Curiosity line", visualIntent: null, claimId: null },
-      { role: BeatRole.VALUE, line: "Value line", visualIntent: null, claimId: "claim-1" },
-      { role: BeatRole.CTA, line: "CTA line", visualIntent: null, claimId: null },
+      { role: BeatRole.HOOK, line: "Строка хука", visualIntent: null, claimId: null },
+      { role: BeatRole.CURIOSITY, line: "Строка любопытства", visualIntent: null, claimId: null },
+      { role: BeatRole.VALUE, line: "Строка ценности", visualIntent: null, claimId: "claim-1" },
+      { role: BeatRole.CTA, line: "Строка призыва", visualIntent: null, claimId: null },
     ],
   };
 
