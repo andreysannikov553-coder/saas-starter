@@ -17,6 +17,8 @@ interface FakeState {
   publications: Map<string, Record<string, unknown>>;
   sendVideoCalls: unknown[];
   sendMessageCalls: unknown[];
+  sendPhotoCalls: unknown[];
+  sendMediaGroupCalls: { photos: Buffer[]; caption?: string }[];
   failSend: boolean;
 }
 
@@ -26,6 +28,8 @@ const state: FakeState = {
   publications: new Map(),
   sendVideoCalls: [],
   sendMessageCalls: [],
+  sendPhotoCalls: [],
+  sendMediaGroupCalls: [],
   failSend: false,
 };
 
@@ -91,6 +95,25 @@ mock.module("./telegram", {
       if (state.failSend) throw new Error("Telegram sendMessage failed: simulated");
       return { messageId: "text-msg-1" };
     },
+    sendTelegramPhoto: async (options: unknown) => {
+      state.sendPhotoCalls.push(options);
+      if (state.failSend) throw new Error("Telegram sendPhoto failed: simulated");
+      return { messageId: "photo-msg-1" };
+    },
+    sendTelegramMediaGroup: async (options: { photos: Buffer[]; caption?: string }) => {
+      state.sendMediaGroupCalls.push(options);
+      if (state.failSend) throw new Error("Telegram sendMediaGroup failed: simulated");
+      return { messageId: "carousel-msg-1" };
+    },
+  },
+});
+
+mock.module("../render/quote-card", {
+  namedExports: {
+    renderQuoteCard: async () => Buffer.from("fake-png"),
+    // One buffer per beat, so tests can assert on slide count without
+    // depending on real image rendering.
+    renderCarouselSlides: async (beats: unknown[]) => beats.map(() => Buffer.from("fake-slide")),
   },
 });
 
@@ -106,6 +129,8 @@ function resetState() {
   state.publications = new Map();
   state.sendVideoCalls = [];
   state.sendMessageCalls = [];
+  state.sendPhotoCalls = [];
+  state.sendMediaGroupCalls = [];
   state.failSend = false;
 }
 
@@ -139,7 +164,7 @@ test("publishes as video when the Video has an assetUrl", async () => {
   assert.equal(pub?.status, "PUBLISHED");
 });
 
-test("falls back to text when the Video has no assetUrl", async () => {
+test("posts a swipeable carousel (one slide per beat) when the Video has no assetUrl", async () => {
   resetState();
   state.video = {
     id: "video-2",
@@ -150,6 +175,7 @@ test("falls back to text when the Video has no assetUrl", async () => {
         { role: "HOOK", line: "Hook!" },
         { role: "CTA", line: "Subscribe" },
       ],
+      hooks: [],
     },
   };
   state.account = {
@@ -161,9 +187,40 @@ test("falls back to text when the Video has no assetUrl", async () => {
 
   const result = await publishVideoToTelegram("video-2", "account-1");
 
-  assert.equal(result.mode, "text");
-  assert.equal(state.sendMessageCalls.length, 1);
+  assert.equal(result.mode, "carousel");
+  assert.equal(state.sendMediaGroupCalls.length, 1);
+  assert.equal(state.sendMediaGroupCalls[0].photos.length, 2);
+  assert.equal(state.sendPhotoCalls.length, 0);
+  assert.equal(state.sendMessageCalls.length, 0);
   assert.equal(state.sendVideoCalls.length, 0);
+});
+
+test("carousel has one slide per beat, not just HOOK and CTA (regression)", async () => {
+  resetState();
+  state.video = {
+    id: "video-2b",
+    orgId: "org-1",
+    assetUrl: null,
+    script: {
+      beats: [
+        { role: "HOOK", line: "Hook!" },
+        { role: "VALUE", line: "The actual finding goes here." },
+        { role: "PAYOFF", line: "And the payoff." },
+        { role: "CTA", line: "Subscribe" },
+      ],
+      hooks: [],
+    },
+  };
+  state.account = {
+    id: "account-1",
+    platform: "TELEGRAM",
+    handle: "@mychannel",
+    credentials: { botToken: "TOKEN123" },
+  };
+
+  await publishVideoToTelegram("video-2b", "account-1");
+
+  assert.equal(state.sendMediaGroupCalls[0].photos.length, 4);
 });
 
 test("rejects a non-Telegram platform account", async () => {
@@ -250,7 +307,10 @@ test("skips sending when the video is already PUBLISHED (regression: no real re-
   const first = await publishVideoToTelegram("video-7", "account-1");
   const second = await publishVideoToTelegram("video-7", "account-1");
 
-  assert.equal(state.sendMessageCalls.length, 1);
+  // Single-beat script: carousel tier needs >=2 slides, so this falls
+  // through to the single quote-card photo tier — see the fallback chain
+  // test below for the multi-tier failure path.
+  assert.equal(state.sendPhotoCalls.length, 1);
   assert.equal(first.externalId, second.externalId);
   assert.equal(second.publicationId, first.publicationId);
 });
@@ -276,6 +336,9 @@ test("still resends when the previous attempt is FAILED, not PUBLISHED", async (
   state.failSend = false;
   const result = await publishVideoToTelegram("video-8", "account-1");
 
-  assert.equal(state.sendMessageCalls.length, 2);
-  assert.equal(result.externalId, "text-msg-1");
+  // First attempt: photo tier fails too, falls all the way to text (1 call).
+  // Second attempt: photo tier succeeds, so text is never reached again.
+  assert.equal(state.sendMessageCalls.length, 1);
+  assert.equal(state.sendPhotoCalls.length, 2);
+  assert.equal(result.externalId, "photo-msg-1");
 });

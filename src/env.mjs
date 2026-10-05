@@ -8,15 +8,62 @@ export const env = createEnv({
 
     // OpenAI
     OPENAI_API_KEY: z.string().min(1),
+    // Optional: point the OpenAI-shaped client at another OpenAI-compatible
+    // endpoint (e.g. Groq's free API) instead of api.openai.com.
+    OPENAI_BASE_URL: z.string().url().optional(),
+    OPENAI_MODEL: z.string().min(1).optional(),
 
     // Anthropic (content engine — optional: required only when
     // LLM_PROVIDER is "claude", the default)
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
-    LLM_PROVIDER: z.enum(["claude", "openai"]).default("claude"),
+    // Required only for an org-level (non-workspace-scoped) Anthropic API key
+    // that Anthropic rejects without an anthropic-workspace-id header.
+    ANTHROPIC_WORKSPACE_ID: z.string().min(1).optional(),
+
+    // More free OpenAI-compatible providers for the "fallback" chain (see
+    // src/lib/content-engine/llm/index.ts) — each optional, only used if set.
+    CEREBRAS_API_KEY: z.string().min(1).optional(),
+    CEREBRAS_MODEL: z.string().min(1).optional(),
+    GEMINI_API_KEY: z.string().min(1).optional(),
+    GEMINI_MODEL: z.string().min(1).optional(),
+    OPENROUTER_API_KEY: z.string().min(1).optional(),
+    OPENROUTER_MODEL: z.string().min(1).optional(),
+    MISTRAL_API_KEY: z.string().min(1).optional(),
+    MISTRAL_MODEL: z.string().min(1).optional(),
+    // Cloudflare Workers AI — needs both, unlike the single-key providers above.
+    CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
+    CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
+    CLOUDFLARE_MODEL: z.string().min(1).optional(),
+
+    // "fallback" (default) chains every configured free provider above, then
+    // Claude — see getLLMProvider. "claude"/"openai" pin a single provider.
+    LLM_PROVIDER: z.enum(["claude", "openai", "fallback"]).default("fallback"),
 
     // ElevenLabs (content engine narration — optional: only needed once a
     // PlatformAccount/Character actually calls the TTS stage)
     ELEVENLABS_API_KEY: z.string().min(1).optional(),
+
+    // Content engine autoposting (/api/cron/publish, triggered by Vercel Cron)
+    // CRON_SECRET must match the request's Authorization: Bearer header —
+    // Vercel sends this automatically for cron-invoked requests once this
+    // env var is set on the project.
+    CRON_SECRET: z.string().min(1).optional(),
+    TELEGRAM_PLATFORM_ACCOUNT_ID: z.string().min(1).optional(),
+
+    // YouTube (Data API v3 — OAuth "Desktop app" client, see scripts/youtube-oauth.ts).
+    // Only the setup scripts read these: the publisher itself takes the same
+    // three values out of PlatformAccount.credentials, written by
+    // scripts/add-youtube-account.ts.
+    YOUTUBE_CLIENT_ID: z.string().min(1).optional(),
+    YOUTUBE_CLIENT_SECRET: z.string().min(1).optional(),
+    YOUTUBE_REFRESH_TOKEN: z.string().min(1).optional(),
+    YOUTUBE_CHANNEL_ID: z.string().min(1).optional(),
+
+    // TikTok (Content Posting API — developers.tiktok.com app credentials).
+    // Needed only to refresh a stored access token, which expires after 24h;
+    // see scripts/add-tiktok-account.ts --refresh-token.
+    TIKTOK_CLIENT_KEY: z.string().min(1).optional(),
+    TIKTOK_CLIENT_SECRET: z.string().min(1).optional(),
 
     // Stripe
     STRIPE_SECRET_KEY: z.string().min(1),
@@ -43,9 +90,31 @@ export const env = createEnv({
     // Server
     DATABASE_URL: process.env.DATABASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
+    OPENAI_MODEL: process.env.OPENAI_MODEL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    ANTHROPIC_WORKSPACE_ID: process.env.ANTHROPIC_WORKSPACE_ID,
+    CEREBRAS_API_KEY: process.env.CEREBRAS_API_KEY,
+    CEREBRAS_MODEL: process.env.CEREBRAS_MODEL,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    GEMINI_MODEL: process.env.GEMINI_MODEL,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
+    MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
+    MISTRAL_MODEL: process.env.MISTRAL_MODEL,
+    CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
+    CLOUDFLARE_MODEL: process.env.CLOUDFLARE_MODEL,
     LLM_PROVIDER: process.env.LLM_PROVIDER,
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+    CRON_SECRET: process.env.CRON_SECRET,
+    TELEGRAM_PLATFORM_ACCOUNT_ID: process.env.TELEGRAM_PLATFORM_ACCOUNT_ID,
+    YOUTUBE_CLIENT_ID: process.env.YOUTUBE_CLIENT_ID,
+    YOUTUBE_CLIENT_SECRET: process.env.YOUTUBE_CLIENT_SECRET,
+    YOUTUBE_REFRESH_TOKEN: process.env.YOUTUBE_REFRESH_TOKEN,
+    YOUTUBE_CHANNEL_ID: process.env.YOUTUBE_CHANNEL_ID,
+    TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY,
+    TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,

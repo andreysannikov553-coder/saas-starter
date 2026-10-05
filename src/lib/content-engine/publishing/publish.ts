@@ -1,9 +1,15 @@
 import { prisma } from "@/lib/db";
-import { sendTelegramMessage, sendTelegramVideo } from "./telegram";
+import {
+  sendTelegramMediaGroup,
+  sendTelegramMessage,
+  sendTelegramPhoto,
+  sendTelegramVideo,
+} from "./telegram";
+import { renderCarouselSlides, renderQuoteCard } from "../render/quote-card";
 import { withStageLog } from "../observability/logger";
 
 export interface PublishToTelegramOptions {
-  /** Caption/text override — defaults to the script's HOOK beat line + CTA line. */
+  /** Caption/text override — defaults to the full script, one beat's line per paragraph. */
   text?: string;
   signal?: AbortSignal;
 }
@@ -11,7 +17,7 @@ export interface PublishToTelegramOptions {
 export interface PublishToTelegramResult {
   publicationId: string;
   externalId: string;
-  mode: "video" | "text";
+  mode: "video" | "carousel" | "photo" | "text";
 }
 
 /**
@@ -20,8 +26,8 @@ export interface PublishToTelegramResult {
  *
  * Falls back to a text-only post when the Video has no `assetUrl` yet (no
  * renderer is built in this pipeline stage) — Telegram is worth posting to
- * even before video rendering exists, since a text post with the hook/CTA
- * still validates the channel and the script content end to end.
+ * even before video rendering exists, since a text post with the full
+ * script still validates the channel and the script content end to end.
  *
  * Skips sending anything if this video+account is already PUBLISHED —
  * without this, a pipeline re-run (or a caller retrying after a later stage
@@ -51,7 +57,9 @@ async function doPublish(
   const [video, account] = await Promise.all([
     prisma.video.findUnique({
       where: { id: videoId },
-      include: { script: { include: { beats: { orderBy: { order: "asc" } } } } },
+      include: {
+        script: { include: { beats: { orderBy: { order: "asc" } }, hooks: true } },
+      },
     }),
     prisma.platformAccount.findUnique({ where: { id: platformAccountId } }),
   ]);
@@ -80,7 +88,7 @@ async function doPublish(
     return {
       publicationId: existing.id,
       externalId: existing.externalId,
-      mode: video.assetUrl ? "video" : "text",
+      mode: video.assetUrl ? "video" : "carousel",
     };
   }
 
@@ -102,20 +110,63 @@ async function doPublish(
   const caption = options.text ?? buildCaption(video.script.beats);
 
   try {
-    const result = video.assetUrl
-      ? await sendTelegramVideo({
+    let result: { messageId: string };
+    let mode: PublishToTelegramResult["mode"];
+
+    if (video.assetUrl) {
+      mode = "video";
+      result = await sendTelegramVideo({
+        botToken,
+        chatId: account.handle,
+        videoUrl: video.assetUrl,
+        caption,
+        signal: options.signal,
+      });
+    } else {
+      // No render yet — post a swipeable carousel (one slide per beat: hook
+      // as the big-text opener, then value/payoff, closing on a subscribe
+      // slide) instead of a single image plus a wall of text below it — the
+      // "Листай ➡️" format Andrey pointed to (@ynikalnoye, 2026-09-23) reads
+      // as a real post, not a text dump with a picture bolted on. Each tier
+      // is best-effort: a media group needs >=2 slides and can itself fail
+      // to send, so this falls back to a single quote card, and that falls
+      // back to plain text, rather than losing the publish entirely.
+      const topHook = pickTopHook(video.script.hooks);
+      const teaser = (topHook?.text ?? caption).slice(0, 1024);
+
+      try {
+        const slides = await renderCarouselSlides(video.script.beats);
+        if (slides.length < 2) throw new Error("not enough beats for a carousel");
+        result = await sendTelegramMediaGroup({
           botToken,
           chatId: account.handle,
-          videoUrl: video.assetUrl,
-          caption,
-          signal: options.signal,
-        })
-      : await sendTelegramMessage({
-          botToken,
-          chatId: account.handle,
-          text: caption,
+          photos: slides,
+          caption: teaser,
           signal: options.signal,
         });
+        mode = "carousel";
+      } catch {
+        try {
+          const card = await renderQuoteCard({ headline: topHook?.text ?? caption.slice(0, 120) });
+          result = await sendTelegramPhoto({
+            botToken,
+            chatId: account.handle,
+            photo: card,
+            caption: teaser,
+            signal: options.signal,
+          });
+          mode = "photo";
+        } catch {
+          mode = "text";
+          result = await sendTelegramMessage({
+            botToken,
+            chatId: account.handle,
+            text: caption,
+            signal: options.signal,
+          });
+        }
+      }
+    }
 
     await prisma.publication.update({
       where: { id: publication.id },
@@ -125,7 +176,7 @@ async function doPublish(
     return {
       publicationId: publication.id,
       externalId: result.messageId,
-      mode: video.assetUrl ? "video" : "text",
+      mode,
     };
   } catch (error) {
     await prisma.publication.update({
@@ -136,14 +187,25 @@ async function doPublish(
   }
 }
 
+/** Highest-scoring hook (by total), if any were generated for this script. */
+function pickTopHook(
+  hooks: { text: string; score: unknown }[] | null | undefined
+): { text: string } | null {
+  if (!hooks || hooks.length === 0) return null;
+  return hooks.reduce((best, h) => {
+    const total = (h.score as { total?: number } | null)?.total ?? 0;
+    const bestTotal = (best.score as { total?: number } | null)?.total ?? 0;
+    return total > bestTotal ? h : best;
+  });
+}
+
 function readBotToken(credentials: unknown): string | null {
   if (typeof credentials !== "object" || credentials === null) return null;
   const token = (credentials as Record<string, unknown>).botToken;
   return typeof token === "string" && token.length > 0 ? token : null;
 }
 
+/** Joins every beat's line in order — the full script, not just the hook/CTA. */
 function buildCaption(beats: { role: string; line: string }[]): string {
-  const hook = beats.find((b) => b.role === "HOOK")?.line;
-  const cta = beats.find((b) => b.role === "CTA")?.line;
-  return [hook, cta].filter(Boolean).join("\n\n");
+  return beats.map((b) => b.line).join("\n\n");
 }

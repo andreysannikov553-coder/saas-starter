@@ -26,6 +26,9 @@ interface FakeState {
   hooksResult: { hookIds: string[]; bestScore: number; belowThreshold: boolean };
   narrateResult: { videoId: string; audioUrl: string };
   publishResult: { publicationId: string; externalId: string; mode: "video" | "text" };
+  textOnlyVideoId: string;
+  publishAllCalls: { scriptId: string; orgId: string }[];
+  publishAllResult: Record<string, unknown>[];
 }
 
 const state: FakeState = {
@@ -38,6 +41,9 @@ const state: FakeState = {
   hooksResult: { hookIds: ["hook-1", "hook-2", "hook-3"], bestScore: 20, belowThreshold: false },
   narrateResult: { videoId: "video-1", audioUrl: "https://example.com/a.mp3" },
   publishResult: { publicationId: "pub-1", externalId: "msg-1", mode: "text" },
+  textOnlyVideoId: "video-text-only",
+  publishAllCalls: [],
+  publishAllResult: [],
 };
 
 mock.module("@/lib/db", {
@@ -95,6 +101,16 @@ mock.module("./hooks/generate", {
 mock.module("./render/narrate-video", {
   namedExports: {
     renderNarrationForScript: async () => state.narrateResult,
+    getOrCreateVideoForScript: async () => state.textOnlyVideoId,
+  },
+});
+
+mock.module("./publishing/publish-all", {
+  namedExports: {
+    publishVideoToAllPlatforms: async (scriptId: string, orgId: string) => {
+      state.publishAllCalls.push({ scriptId, orgId });
+      return state.publishAllResult;
+    },
   },
 });
 
@@ -124,6 +140,9 @@ function reset() {
   };
   state.narrateResult = { videoId: "video-1", audioUrl: "https://example.com/a.mp3" };
   state.publishResult = { publicationId: "pub-1", externalId: "msg-1", mode: "text" };
+  state.textOnlyVideoId = "video-text-only";
+  state.publishAllCalls = [];
+  state.publishAllResult = [];
 }
 
 test("stops at 'research' when nothing is found and no sources exist yet", async () => {
@@ -203,6 +222,51 @@ test("runs narration and publishing through to completion when publish is given"
   assert.equal(result.stoppedAt, null);
   assert.equal(result.videoId, "video-1");
   assert.equal(result.publicationId, "pub-1");
+});
+
+test("publishes as text without narration when ttsVoiceId is omitted", async () => {
+  reset();
+  state.sources = [{ id: "source-1", topicId: "topic-6b", hasClaims: false }];
+  state.researchResult = { found: 1, created: 1, skipped: 0 };
+  state.claimCount = 1;
+
+  const result = await runContentPipeline("topic-6b", {
+    publish: { telegramPlatformAccountId: "account-1" },
+  });
+
+  assert.equal(result.stoppedAt, null);
+  assert.equal(result.videoId, "video-text-only");
+  assert.equal(result.publicationId, "pub-1");
+});
+
+test("publish.allPlatforms fans out instead of posting only to Telegram", async () => {
+  reset();
+  state.sources = [{ id: "source-1", topicId: "topic-6c", hasClaims: false }];
+  state.researchResult = { found: 1, created: 1, skipped: 0 };
+  state.claimCount = 1;
+  state.publishAllResult = [
+    { platform: "YOUTUBE_SHORTS", status: "SKIPPED", reason: "no rendered video" },
+    { platform: "TELEGRAM", status: "PUBLISHED", publicationId: "pub-tg", externalId: "tg-1" },
+  ];
+
+  const result = await runContentPipeline("topic-6c", {
+    publish: { allPlatforms: { orgId: "org-1" } },
+  });
+
+  assert.equal(result.stoppedAt, null);
+  assert.deepEqual(state.publishAllCalls, [{ scriptId: "script-1", orgId: "org-1" }]);
+  assert.equal(result.platformResults?.length, 2);
+  // publicationId points at the first platform that actually published.
+  assert.equal(result.publicationId, "pub-tg");
+});
+
+test("publish without a Telegram account or allPlatforms is a caller error", async () => {
+  reset();
+  state.sources = [{ id: "source-1", topicId: "topic-6d", hasClaims: false }];
+  state.researchResult = { found: 1, created: 1, skipped: 0 };
+  state.claimCount = 1;
+
+  await assert.rejects(() => runContentPipeline("topic-6d", { publish: {} }), /neither was given/);
 });
 
 test("skipResearch skips researchTopic/extractClaimsForSource and uses existing claim count", async () => {

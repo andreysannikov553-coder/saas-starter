@@ -1,6 +1,7 @@
 import { stripe } from "./client";
 import { prisma } from "@/lib/db";
 import { env } from "@/env.mjs";
+import type { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 
 /**
@@ -18,7 +19,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
   await prisma.webhookEvent.create({
     data: {
       type: event.type,
-      data: event.data as unknown as Record<string, unknown>,
+      data: event.data as unknown as Prisma.InputJsonObject,
     },
   });
 

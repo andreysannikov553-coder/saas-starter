@@ -14,8 +14,15 @@ export class ClaudeProvider implements LLMProvider {
   private readonly client: Anthropic;
   private readonly model: string;
 
-  constructor(options: { apiKey: string; model?: string }) {
-    this.client = new Anthropic({ apiKey: options.apiKey });
+  constructor(options: { apiKey: string; model?: string; workspaceId?: string }) {
+    this.client = new Anthropic({
+      apiKey: options.apiKey,
+      // Org-level (non-workspace-scoped) API keys are rejected by Anthropic
+      // without this header; workspace-scoped keys don't need it.
+      defaultHeaders: options.workspaceId
+        ? { "anthropic-workspace-id": options.workspaceId }
+        : undefined,
+    });
     // Haiku 4.5: cheap enough for high-volume extraction work; see
     // README section 8 (tech stack) — a bigger model is a per-call override,
     // not a default, so cost per video stays predictable.
