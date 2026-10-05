@@ -62,8 +62,10 @@ Publishing conventions, shared by every platform module in `publishing/`:
 - Tests mock `fetch` and `@/lib/db` rather than touching a network or a
   database — follow `publishing/youtube.test.ts` or `social.test.ts`.
 
-**Known gap:** nothing in the codebase sets `Video.assetUrl`. Renders land in
-a local file via `scripts/make-kinetic-video.ts`, while YouTube/TikTok/Reels
-publish _from_ `assetUrl`. Until a render -> storage -> `assetUrl` step
-exists, the fan-out (`publishing/publish-all.ts`) reports those platforms as
-`SKIPPED` and Instagram/Telegram fall back to slide carousels.
+Render -> storage -> `assetUrl`: `scripts/make-kinetic-video.ts --script=<id|latest>
+--upload` renders the Reel, runs the Render Gate in `render/attach-render.ts`
+(vertical 9:16, h264 + aac, 3-180s) and uploads it to the
+`content-engine-renders` bucket (must be public: Instagram fetches the video by
+URL), setting `Video.assetUrl` + `READY`. Only then do YouTube/TikTok/Reels in
+`publishing/publish-all.ts` stop reporting `SKIPPED`. The upload never reuses a
+Video that already has a `PUBLISHED` Publication.
