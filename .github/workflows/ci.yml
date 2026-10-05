@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch supersedes the previous run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: type-check, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # `prepare` runs husky, which has nothing to install in CI.
+      HUSKY: 0
+      # `postinstall` runs `prisma generate`, which reads the datasource URL
+      # from the schema. It never connects, but the variable must parse as a
+      # postgres URL. No test touches a database.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SKIP_ENV_VALIDATION: 1
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # Also generates the Prisma client via postinstall, which type-check needs.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
