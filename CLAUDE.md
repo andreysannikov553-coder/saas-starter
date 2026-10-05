@@ -67,5 +67,6 @@ Render -> storage -> `assetUrl`: `scripts/make-kinetic-video.ts --script=<id|lat
 (vertical 9:16, h264 + aac, 3-180s) and uploads it to the
 `content-engine-renders` bucket (must be public: Instagram fetches the video by
 URL), setting `Video.assetUrl` + `READY`. Only then do YouTube/TikTok/Reels in
-`publishing/publish-all.ts` stop reporting `SKIPPED`. The upload never reuses a
+`publishing/publish-all.ts` stop reporting `SKIPPED`; `scripts/publish-script.ts
+--script=latest` then posts that render without generating a new topic. The upload never reuses a
 Video that already has a `PUBLISHED` Publication.
