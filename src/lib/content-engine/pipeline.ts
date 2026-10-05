@@ -3,7 +3,7 @@ import { researchTopic, type ResearchTopicOptions } from "./research";
 import { extractClaimsForSource } from "./claims/extract";
 import { generateScriptForTopic } from "./scripts/generate";
 import { generateHooksForScript } from "./hooks/generate";
-import { renderNarrationForScript } from "./render/narrate-video";
+import { renderNarrationForScript, getOrCreateVideoForScript } from "./render/narrate-video";
 import { publishVideoToTelegram } from "./publishing/publish";
 import { withStageLog } from "./observability/logger";
 
@@ -12,13 +12,17 @@ export interface RunContentPipelineOptions {
   /** Skip research/claim extraction — use when the topic already has claims. */
   skipResearch?: boolean;
   /**
-   * Narrate and publish once a script exists. Omitted entirely to stop after
-   * scoring hooks — narration/publishing need real credentials this
-   * sandbox doesn't have, so callers can run everything up to that point
-   * without them.
+   * Publish once a script exists. Omitted entirely to stop after scoring
+   * hooks — publishing needs a real Telegram bot this sandbox doesn't have,
+   * so callers can run everything up to that point without one.
    */
   publish?: {
-    ttsVoiceId: string;
+    /**
+     * Narrate with this ElevenLabs voice before publishing. Omitted to
+     * publish the script as text only — worth doing on its own, since
+     * narration needs a separate ElevenLabs key that publishing doesn't.
+     */
+    ttsVoiceId?: string;
     telegramPlatformAccountId: string;
   };
 }
@@ -49,10 +53,12 @@ export interface RunContentPipelineResult {
  * refuses on zero claims, etc.) still applies — this function stops and
  * reports where, rather than trying to push through with no input.
  *
- * `publish` is optional and separate from the rest on purpose: narration
- * needs an ElevenLabs key and publishing needs a live Telegram bot, neither
- * of which exist in this sandbox, so a caller can exercise research through
- * hook-scoring (the parts with automated tests behind them) without those.
+ * `publish` is optional and separate from the rest on purpose: publishing
+ * needs a live Telegram bot this sandbox doesn't have, so a caller can
+ * exercise research through hook-scoring (the parts with automated tests
+ * behind them) without one. Within `publish`, `ttsVoiceId` is itself
+ * optional — narration needs a separate ElevenLabs key, so a caller can
+ * publish the script as text before that key exists.
  */
 export async function runContentPipeline(
   topicId: string,
@@ -134,13 +140,16 @@ async function doRunContentPipeline(
     return result;
   }
 
-  const narration = await renderNarrationForScript(script.scriptId, {
-    voiceId: options.publish.ttsVoiceId,
-  });
-  result.videoId = narration.videoId;
+  result.videoId = options.publish.ttsVoiceId
+    ? (
+        await renderNarrationForScript(script.scriptId, {
+          voiceId: options.publish.ttsVoiceId,
+        })
+      ).videoId
+    : await getOrCreateVideoForScript(script.scriptId);
 
   const publication = await publishVideoToTelegram(
-    narration.videoId,
+    result.videoId,
     options.publish.telegramPlatformAccountId
   );
   result.publicationId = publication.publicationId;

@@ -14,6 +14,7 @@ const SYSTEM_PROMPT = `You write hook variants for a faceless health/science sho
 score each one, as the Hook Optimizer stage of the pipeline.
 
 Rules, non-negotiable:
+- Write every hook's "text" in Russian, matching the script's language — never English.
 - Write exactly ${HOOK_VARIANTS_PER_SCRIPT} distinct hook variants for the given script. Vary the
   angle (e.g. обвинение / гипотеза / скрытая деталь), not just the wording of the same idea.
 - Each hook must be something the given script can actually deliver on — never promise a fact the

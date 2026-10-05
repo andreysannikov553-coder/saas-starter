@@ -1,6 +1,6 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { searchEuropePmc } from "./europe-pmc";
+import { searchEuropePmc, toResearchedSource } from "./europe-pmc";
 
 /**
  * No network access to Europe PMC in this sandbox, so this suite mocks the
@@ -42,4 +42,25 @@ test("searchEuropePmc retries a transient 5xx and succeeds (regression: no retry
   assert.equal(calls, 2);
   assert.deepEqual(result, []);
   globalThis.fetch = originalFetch;
+});
+
+test("toResearchedSource carries abstractText through as abstract", () => {
+  const source = toResearchedSource({
+    doi: "10.1234/x",
+    title: "Sleep and muscle recovery",
+    abstractText: "A randomized trial found...",
+    pubTypeList: { pubType: ["Journal Article"] },
+  });
+
+  assert.equal(source?.abstract, "A randomized trial found...");
+});
+
+test("toResearchedSource sets abstract to null when Europe PMC returns none", () => {
+  const source = toResearchedSource({
+    doi: "10.1234/x",
+    title: "Sleep and muscle recovery",
+    pubTypeList: { pubType: ["Journal Article"] },
+  });
+
+  assert.equal(source?.abstract, null);
 });
