@@ -13,6 +13,7 @@
  *
  * Flags:
  *   --script=<id>    Beats come from this Script in the database, in order.
+ *                    `--script=latest` picks the newest Script that has beats.
  *   --beats=<file>   Beats come from a JSON file: [{ "role": "HOOK", "line": "…" }]
  *   --voice=<path>   Piper voice .onnx (default: $PIPER_VOICE, else
  *                    ~/.jarvis/models/ru_RU-ruslan-medium.onnx)
@@ -82,8 +83,27 @@ async function durationSeconds(file: string): Promise<number> {
   return seconds;
 }
 
-async function loadBeats(): Promise<BeatInput[]> {
-  const scriptId = parseFlag("script");
+/**
+ * `--script=latest` means the newest Script that has beats, so a first run
+ * needs no id copied out of the database.
+ */
+async function resolveScriptId(flag: string | undefined): Promise<string | undefined> {
+  if (flag !== "latest") return flag;
+  const script = await prisma.script.findFirst({
+    where: { beats: { some: {} } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (!script) {
+    throw new Error(
+      "--script=latest: there is no Script with beats yet — run scripts/run-topic.ts first"
+    );
+  }
+  console.log(`Script: ${script.id}`);
+  return script.id;
+}
+
+async function loadBeats(scriptId: string | undefined): Promise<BeatInput[]> {
   const beatsFile = parseFlag("beats");
 
   if (scriptId) {
@@ -173,7 +193,7 @@ async function main() {
 
   const voice = parseFlag("voice") ?? process.env.PIPER_VOICE ?? DEFAULT_VOICE;
   const bgFlag = parseFlag("bg");
-  const beats = await loadBeats();
+  const beats = await loadBeats(await resolveScriptId(parseFlag("script")));
 
   const dir = await mkdtemp(path.join(tmpdir(), "kinetic-"));
   try {
