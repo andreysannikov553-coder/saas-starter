@@ -10,6 +10,7 @@
  * Usage:
  *   npx tsx --env-file=.env.local scripts/make-kinetic-video.ts out.mp4 --script=<scriptId>
  *   npx tsx scripts/make-kinetic-video.ts out.mp4 --beats=beats.json
+ *   npx tsx --env-file=.env.local scripts/make-kinetic-video.ts out.mp4 --script=<scriptId> --upload
  *
  * Flags:
  *   --script=<id>    Beats come from this Script in the database, in order.
@@ -17,6 +18,10 @@
  *   --voice=<path>   Piper voice .onnx (default: $PIPER_VOICE, else
  *                    ~/.jarvis/models/ru_RU-ruslan-medium.onnx)
  *   --bg=<index>     Background index for the frames (default: random)
+ *   --upload         With --script: run the Render Gate, upload the MP4 to
+ *                    Supabase Storage and set the script's Video.assetUrl, so
+ *                    `run-topic.ts --publish-all` (or the cron) posts it as a
+ *                    Reel / Short / TikTok instead of skipping those platforms.
  *
  * Piper itself lives outside the repository — any Python environment with the
  * `piper-tts` package will do; point $PIPER_PYTHON at its interpreter. On this
@@ -32,6 +37,10 @@ import {
   LINE_GAP_SECONDS,
   type KineticBeat,
 } from "../src/lib/content-engine/render/kinetic-video";
+import {
+  attachRenderedVideo,
+  probeVideoFile,
+} from "../src/lib/content-engine/render/attach-render";
 
 const PIPER_PYTHON = process.env.PIPER_PYTHON ?? path.join(homedir(), ".jarvis/venv/bin/python");
 const DEFAULT_VOICE = path.join(homedir(), ".jarvis/models/ru_RU-ruslan-medium.onnx");
@@ -173,6 +182,13 @@ async function main() {
 
   const voice = parseFlag("voice") ?? process.env.PIPER_VOICE ?? DEFAULT_VOICE;
   const bgFlag = parseFlag("bg");
+  const upload = process.argv.includes("--upload");
+  const scriptId = parseFlag("script");
+  if (upload && !scriptId) {
+    throw new Error(
+      "--upload needs --script=<scriptId>: the upload is recorded on that script's Video"
+    );
+  }
   const beats = await loadBeats();
 
   const dir = await mkdtemp(path.join(tmpdir(), "kinetic-"));
@@ -185,6 +201,12 @@ async function main() {
     await writeFile(out, mp4);
     const seconds = timed.reduce((sum, b) => sum + b.speechSeconds + LINE_GAP_SECONDS, 0);
     console.log(`\n${out} — ${seconds.toFixed(1)}s, ${(mp4.length / 1e6).toFixed(1)} MB`);
+
+    if (upload && scriptId) {
+      const probe = await probeVideoFile(out);
+      const attached = await attachRenderedVideo(scriptId, mp4, probe);
+      console.log(`Uploaded as Video ${attached.videoId}: ${attached.assetUrl}`);
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
