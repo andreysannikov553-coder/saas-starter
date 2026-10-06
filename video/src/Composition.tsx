@@ -1,8 +1,10 @@
 import {
   AbsoluteFill,
+  Audio,
   interpolate,
   Sequence,
   spring,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -69,6 +71,7 @@ export const Intro: React.FC<IntroProps> = (props) => {
     >
       <Sequence from={10}>
         <Title {...props} />
+        <Audio src={staticFile("voiceover.wav")} />
       </Sequence>
     </AbsoluteFill>
   );
