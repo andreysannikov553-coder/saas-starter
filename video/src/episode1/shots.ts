@@ -29,6 +29,8 @@ export type Shot = {
   tone: Tone;
   /** Generated clip in public/, e.g. "ep1/shot01.mp4". Placeholder when unset. */
   clip?: string;
+  /** Generated still in public/, shown with a slow push-in when there is no clip. */
+  image?: string;
   overlay?: Overlay;
   lines?: Line[];
   sfx?: Sfx[];
@@ -180,6 +182,7 @@ export const shots: Shot[] = [
     characters: "Даниил, Лев",
     action: "Даниил впервые просит. Рука Льва ложится ему на плечо.",
     tone: "warm",
+    image: "ep1/shot10.jpg",
     lines: [
       { file: "s10_d1", at: 0.6, dur: 0.29, text: "Лёв." },
       { file: "s10_d2", at: 1.8, dur: 1.21, text: "Мне нужна помощь." },
@@ -202,6 +205,7 @@ export const shots: Shot[] = [
     characters: "Лев",
     action: "Улыбка уходит. Лев переворачивает папку лицом вниз.",
     tone: "warm",
+    image: "ep1/shot12.jpg",
     overlay: "folder",
     sfx: [
       { file: "rain", at: 0 },

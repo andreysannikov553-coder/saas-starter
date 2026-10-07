@@ -1,6 +1,7 @@
 import {
   AbsoluteFill,
   Audio,
+  Img,
   interpolate,
   OffthreadVideo,
   Sequence,
@@ -42,6 +43,21 @@ const Placeholder: React.FC<{ shot: Shot }> = ({ shot }) => (
   </AbsoluteFill>
 );
 
+const Still: React.FC<{ src: string }> = ({ src }) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  const scale = interpolate(frame, [0, durationInFrames], [1, 1.06]);
+  return (
+    <AbsoluteFill>
+      <Img
+        src={staticFile(src)}
+        className="h-full w-full object-cover"
+        style={{ transform: `scale(${scale})` }}
+      />
+    </AbsoluteFill>
+  );
+};
+
 const Subtitle: React.FC<{ line: Line }> = ({ line }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -66,11 +82,14 @@ const Subtitle: React.FC<{ line: Line }> = ({ line }) => {
 
 const ShotView: React.FC<{ shot: Shot }> = ({ shot }) => {
   const { fps } = useVideoConfig();
-  const Over = shot.overlay ? OVERLAYS[shot.overlay] : null;
+  // Overlays stand in for props the generated frames do not show yet.
+  const Over = shot.overlay && !shot.image ? OVERLAYS[shot.overlay] : null;
   return (
     <AbsoluteFill>
       {shot.clip ? (
         <OffthreadVideo src={staticFile(shot.clip)} muted />
+      ) : shot.image ? (
+        <Still src={shot.image} />
       ) : (
         <Placeholder shot={shot} />
       )}
