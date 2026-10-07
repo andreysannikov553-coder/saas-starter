@@ -24,7 +24,11 @@ const Title: React.FC<IntroProps> = ({ title, subtitle }) => {
   const { fps } = useVideoConfig();
 
   const titleIn = spring({ frame, fps, config: { damping: 200 } });
-  const subtitleIn = spring({ frame: frame - 20, fps, config: { damping: 200 } });
+  const subtitleIn = spring({
+    frame: frame - 20,
+    fps,
+    config: { damping: 200 },
+  });
 
   return (
     <AbsoluteFill className="items-center justify-center text-center">
